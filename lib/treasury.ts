@@ -29,15 +29,26 @@ type RawTreasuryAuction = Record<string, string>;
 const n = (value?: string) => value && Number.isFinite(Number(value)) ? Number(value) : null;
 
 function normalize(row: RawTreasuryAuction): TreasuryAuction {
-  const stop = n(row.highYield) ?? n(row.highDiscountRate) ?? n(row.highDiscountMargin);
-  const stopLabel = row.highYield ? "High yield" : row.highDiscountMargin ? "Discount margin" : "High rate";
+  const type = row.type || row.securityType;
+  const stop = type === "Bill" || row.cashManagementBillCMB === "Yes"
+    ? n(row.highDiscountRate)
+    : type === "FRN"
+      ? n(row.highDiscountMargin)
+      : n(row.highYield);
+  const stopLabel = type === "Bill" || row.cashManagementBillCMB === "Yes"
+    ? "High rate"
+    : type === "FRN"
+      ? "Discount margin"
+      : type === "TIPS"
+        ? "High real yield"
+        : "High yield";
   return {
     cusip: row.cusip,
     auctionDate: row.auctionDate,
     announcementDate: row.announcementDate,
     issueDate: row.issueDate,
     maturityDate: row.maturityDate,
-    type: row.type || row.securityType,
+    type,
     term: row.term || row.securityTerm,
     securityTerm: row.securityTerm,
     offeringAmount: n(row.offeringAmount) ?? 0,
@@ -81,15 +92,23 @@ const resultSeed = [
   ["912797UZ8","2026-08-17","Bill","13-Week",92e9,2.86,3.715,3.802,null,99.060931,269.5519569e9,98.7258639e9,35.21688e9,6.074e9,48.1358881e9,true],
   ["912797TV9","2026-08-17","Bill","26-Week",79e9,2.97,3.78,3.907,null,98.089,240.5495353e9,84.7753723e9,18.9740375e9,8.0723875e9,49.934964e9,true],
   ["912810UW6","2026-08-13","Bond","30-Year",25e9,2.39,5.216,null,5.125,98.627017,66.1245288e9,31.3235338e9,2.866735e9,5.39015e9,16.647723e9,false],
+  ["91282CRD5","2026-07-29","FRN","2-Year",30e9,3.37,.050,null,null,100,104.3158454e9,33.3172268e9,11.0182e9,.0008182e9,18.9433132e9,false],
+  ["91282CRC7","2026-07-28","Note","7-Year",44e9,2.49,4.473,null,4.375,99.416549,114.269981e9,48.864691e9,5.69451e9,7.413e9,30.801964e9,false],
+  ["91282CRA1","2026-07-27","Note","5-Year",70e9,2.28,4.408,null,4.375,99.853357,167.4915709e9,77.7392809e9,9.44771e9,19.003e9,41.354505e9,false],
+  ["91282CRB9","2026-07-27","Note","2-Year",69e9,2.66,4.315,null,4.25,99.87672,191.3062317e9,76.6288421e9,6.3408432e9,23.0801672e9,38.355032e9,false],
 ];
 
 const fallbackResults: TreasuryAuction[] = resultSeed.map(([cusip,auctionDate,type,term,offeringAmount,bidToCover,stopRate,investmentRate,couponRate,pricePer100,totalTendered,totalAccepted,dealerAccepted,directAccepted,indirectAccepted,reopening]) => ({
   cusip,auctionDate,announcementDate:"",issueDate:"",maturityDate:"",type,term,securityTerm:term,offeringAmount,closingTimeCompetitive:"",reopening,cmb:false,bidToCover,stopRate,
-  stopLabel:type === "Bill" ? "High rate" : "High yield",investmentRate,couponRate,pricePer100,totalTendered,totalAccepted,dealerAccepted,directAccepted,indirectAccepted,
+  stopLabel:type === "Bill" ? "High rate" : type === "FRN" ? "Discount margin" : type === "TIPS" ? "High real yield" : "High yield",investmentRate,couponRate,pricePer100,totalTendered,totalAccepted,dealerAccepted,directAccepted,indirectAccepted,
 } as TreasuryAuction));
 
 async function fetchRows(url: string) {
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(7000),
+  });
   if (!response.ok) throw new Error(`TreasuryDirect ${response.status}`);
   return await response.json() as RawTreasuryAuction[];
 }

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,21 +12,18 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const image = `${protocol}://${host}/og.png`;
-  const title = "FV Terminal — U.S. Treasury Auctions";
-  const description = "A modern primary-market terminal for U.S. Treasury auction schedules, results, demand signals, and data architecture.";
-  return {
-    title,
-    description,
-    icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
-    openGraph: { title, description, images: [{ url: image, width: 1200, height: 630, alt: "FV Terminal U.S. Treasury Auctions" }] },
-    twitter: { card: "summary_large_image", title, description, images: [image] },
-  };
-}
+const siteOrigin = new URL("https://fv-treasury-auctions.no1-trader-kang.chatgpt.site");
+const title = "FV Terminal — U.S. Treasury Auctions";
+const description = "A modern primary-market terminal for U.S. Treasury auction schedules, compact prior results, demand signals, and data architecture.";
+
+export const metadata: Metadata = {
+  metadataBase: siteOrigin,
+  title,
+  description,
+  icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+  openGraph: { title, description, images: [{ url: "/og.png", width: 1200, height: 630, alt: "FV Terminal U.S. Treasury Auctions" }] },
+  twitter: { card: "summary_large_image", title, description, images: ["/og.png"] },
+};
 
 export default function RootLayout({
   children,

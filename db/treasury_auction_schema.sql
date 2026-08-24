@@ -64,7 +64,7 @@ CREATE TABLE bidder_allocation (
   bidder_type      bidder_type NOT NULL,
   tendered_amount  NUMERIC(20,2),
   accepted_amount  NUMERIC(20,2),
-  accepted_pct     NUMERIC(8,4) GENERATED ALWAYS AS
+  acceptance_rate NUMERIC(8,4) GENERATED ALWAYS AS
     (CASE WHEN tendered_amount > 0 THEN accepted_amount / tendered_amount * 100 END) STORED,
   PRIMARY KEY (auction_id, bidder_type)
 );
@@ -88,9 +88,11 @@ CREATE TABLE auction_source_link (
 );
 
 -- Hot-path indexes mirror the terminal's schedule, tape, and security-history queries.
-CREATE INDEX idx_auction_date_type ON auction (auction_date DESC, cusip);
+CREATE INDEX idx_security_type_cusip ON security_master (security_type, cusip);
+CREATE INDEX idx_auction_date ON auction (auction_date DESC, cusip);
 CREATE INDEX idx_auction_upcoming ON auction (status, auction_date) WHERE status <> 'resulted';
 CREATE INDEX idx_auction_cusip_history ON auction (cusip, auction_date DESC);
+CREATE INDEX idx_auction_term_history ON auction (security_term, auction_date DESC);
 CREATE INDEX idx_result_bid_to_cover ON auction_result (bid_to_cover_ratio DESC) WHERE bid_to_cover_ratio IS NOT NULL;
 CREATE INDEX idx_snapshot_fetched_at ON source_snapshot (fetched_at DESC);
 
@@ -105,8 +107,43 @@ FROM auction a
 JOIN security_master s USING (cusip)
 LEFT JOIN auction_result r USING (auction_id);
 
+-- Main screen view: every announced line with the latest earlier result for
+-- the same security type and auction term. This is the compact comparison
+-- rendered in the forward calendar.
+CREATE VIEW v_auction_monitor AS
+SELECT
+  current_auction.*,
+  prior.auction_id          AS prior_auction_id,
+  prior.auction_date        AS prior_auction_date,
+  prior.stop_metric         AS prior_stop_metric,
+  prior.stop_value          AS prior_stop_value,
+  prior.bid_to_cover_ratio  AS prior_bid_to_cover_ratio,
+  prior.indirect_award_pct  AS prior_indirect_award_pct
+FROM v_auction_terminal current_auction
+LEFT JOIN LATERAL (
+  SELECT
+    pa.auction_id,
+    pa.auction_date,
+    pr.stop_metric,
+    pr.stop_value,
+    pr.bid_to_cover_ratio,
+    CASE WHEN pr.total_accepted > 0
+      THEN iba.accepted_amount / pr.total_accepted * 100
+    END AS indirect_award_pct
+  FROM auction pa
+  JOIN security_master ps ON ps.cusip = pa.cusip
+  JOIN auction_result pr ON pr.auction_id = pa.auction_id
+  LEFT JOIN bidder_allocation iba
+    ON iba.auction_id = pa.auction_id
+   AND iba.bidder_type = 'indirect'
+  WHERE ps.security_type = current_auction.security_type
+    AND pa.security_term = current_auction.security_term
+    AND pa.auction_date < current_auction.auction_date
+  ORDER BY pa.auction_date DESC
+  LIMIT 1
+) prior ON TRUE;
+
 ANALYZE security_master;
 ANALYZE auction;
 ANALYZE auction_result;
 ANALYZE bidder_allocation;
-

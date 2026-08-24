@@ -1,15 +1,50 @@
 # U.S. Treasury Auction Terminal — API & DB Design
 
-## 1. Source endpoints
+## 1. Source and refresh policy
 
-| Purpose | Official endpoint | Refresh policy |
+| Purpose | TreasuryDirect endpoint | Suggested polling |
 |---|---|---|
-| Announced / upcoming auctions | `https://www.treasurydirect.gov/TA_WS/securities/announced?format=json` | Poll every 15 minutes on business days |
-| Auction results | `https://www.treasurydirect.gov/TA_WS/securities/auctioned?format=json&day=45` | Poll every 5 minutes around scheduled closes, otherwise 30 minutes |
+| Announced / upcoming auctions | `https://www.treasurydirect.gov/TA_WS/securities/announced?format=json` | Every 15 minutes on U.S. business days |
+| Recent auction results | `https://www.treasurydirect.gov/TA_WS/securities/auctioned?format=json&day=45` | Every 5 minutes near scheduled closes; otherwise every 30 minutes |
 
-Both endpoints return the same wide record shape (roughly 100 string fields). Fields that are not yet applicable are empty strings. The ingestion layer must convert empty strings to `NULL`, parse dates as U.S. Eastern market dates, and parse amounts/rates as exact decimals.
+TreasuryDirect's [Upcoming Auctions](https://www.treasurydirect.gov/auctions/upcoming/) page and the U.S. government's [Upcoming Auctions dataset listing](https://catalog.data.gov/dataset/upcoming-auctions) identify the announced feed as the source for upcoming terms. The [Auction Results dataset listing](https://catalog.data.gov/dataset/auction-results) identifies the auctioned feed for recent results.
 
-## 2. Optimized extraction set
+As verified on 24 August 2026, each API row exposes **120 string-valued fields**. Announcement rows and result rows share that wide shape; fields that are not yet applicable are empty strings. Ingestion must convert empty strings to `NULL`, parse market dates without shifting the calendar day, and store money/rates as exact decimals.
+
+## 2. What to show on the compact terminal
+
+### Default forward-calendar row
+
+| Display | API field / rule | Why it earns space |
+|---|---|---|
+| Auction date | `auctionDate` | Primary desk workflow key |
+| Security | `term`, `type`, `cusip`, `reopening` | Identifies tenor and issue |
+| Offering | `offeringAmount` | Headline supply |
+| Competitive close | `closingTimeCompetitive` | Actionable bid deadline in ET |
+| Settlement | `issueDate`; maturity as secondary | Funding and settlement context |
+| Last comparable result | latest earlier result with equal `type + term` | Immediate benchmark without opening a detail page |
+
+The comparable-result cell contains only the prior stop and bid-to-cover. This is the most compact way to show schedule and result together without turning the calendar into a research table.
+
+### Result row and detail card
+
+- Stop metric and value
+- `bidToCoverRatio`
+- `offeringAmount`
+- indirect award share = `indirectBidderAccepted / totalAccepted`
+- award mix for indirect, direct, primary dealer, and residual other
+
+Price, coupon, investment rate, spread, tendered amount and CUSIP remain available in the selected-result card or API model, but do not all belong in the default table.
+
+### Chart choice
+
+- Calendar tab: upcoming offering amount by auction line.
+- Results tab: recent bid-to-cover observations.
+- The chart follows the same security filter as the table and updates row context when selected.
+
+Mixed-tenor bid-to-cover is a tape view, not a like-for-like statistical comparison. Deeper analysis should filter by `type + term`.
+
+## 3. Optimized extraction set
 
 ### Identity and instrument
 
@@ -24,7 +59,7 @@ Both endpoints return the same wide record shape (roughly 100 string fields). Fi
 
 ### Clearing result
 
-- `highYield`, `highDiscountRate`, `highInvestmentRate`, `highDiscountMargin`
+- `highYield`, `highDiscountRate`, `highInvestmentRate`, `highDiscountMargin`, `spread`
 - `pricePer100`, `bidToCoverRatio`, `allocationPercentage`
 - `totalTendered`, `totalAccepted`, `competitiveTendered`, `competitiveAccepted`
 
@@ -38,22 +73,22 @@ Both endpoints return the same wide record shape (roughly 100 string fields). Fi
 ### Traceability
 
 - `pdfFilenameAnnouncement`, `pdfFilenameCompetitiveResults`
-- raw JSON payload, endpoint, retrieval timestamp, HTTP status, SHA-256 hash, transform version
+- endpoint, retrieval timestamp, HTTP status, raw JSON, SHA-256 payload hash, transform version
 
-Fields such as bidding minimums, STRIPS identifiers, CPI reference values, call fields, or NLP thresholds remain in the raw snapshot and can be promoted later without re-fetching history. They are intentionally excluded from the compact terminal view.
+Bidding minimums, STRIPS identifiers, CPI reference values, call fields and NLP thresholds stay in the raw snapshot. They can be promoted later without refetching history.
 
-## 3. Type-aware stop-rate rule
+## 4. Type-aware stop rule
 
 | Security | Primary displayed stop | Secondary display |
 |---|---|---|
 | Bill / CMB | `highDiscountRate` | `highInvestmentRate`, `pricePer100` |
 | Note / Bond | `highYield` | coupon `interestRate`, `pricePer100` |
-| TIPS | `highYield` (real yield) | coupon, adjusted price/index fields when needed |
+| TIPS | `highYield` labeled real yield | coupon and adjusted price/index fields when needed |
 | FRN | `highDiscountMargin` | `spread`, `pricePer100` |
 
-The database stores `stop_metric` and `stop_value` rather than four nullable columns in the serving layer. The raw and normalized result tables may still retain secondary metrics.
+The serving model stores `stop_metric` plus `stop_value`, avoiding four sparsely populated columns on the hot query path. Secondary metrics remain typed in `auction_result` and all source values remain in `source_snapshot`.
 
-## 4. Logical model
+## 5. Logical data model
 
 ```mermaid
 erDiagram
@@ -64,22 +99,24 @@ erDiagram
   SOURCE_SNAPSHOT ||--o{ AUCTION_SOURCE_LINK : contains
 ```
 
-The natural auction identity is `(cusip, auction_date, issue_date)`. This is safer than CUSIP alone because reopenings reuse a CUSIP across multiple auctions.
+The auction business key is `(cusip, auction_date, issue_date)`. CUSIP alone is unsafe because reopenings reuse the same security across auction events. `bidder_allocation.acceptance_rate` means accepted divided by tendered for that bidder class. Award share on the screen is calculated against `auction_result.total_accepted`.
 
-## 5. Query patterns and indexes
+## 6. Hot queries and indexes
 
-1. Forward calendar: `status <> 'resulted' ORDER BY auction_date` → partial index on `(status, auction_date)`.
-2. Recent tape by type: `auction_date DESC` plus security type → date-led index and join to `security_master`.
+1. Forward calendar: `status <> 'resulted' ORDER BY auction_date` → partial `(status, auction_date)` index.
+2. Comparable prior result: equal `security_type + security_term`, earlier auction date → `(security_term, auction_date DESC)` plus `(security_type, cusip)`.
 3. CUSIP history: `WHERE cusip = ? ORDER BY auction_date DESC` → `(cusip, auction_date DESC)`.
-4. Latest raw replay: `ORDER BY fetched_at DESC` → snapshot timestamp index.
+4. Raw replay: `ORDER BY fetched_at DESC` → snapshot timestamp index.
 
-The executable PostgreSQL DDL is in `db/treasury_auction_schema.sql`.
+`v_auction_terminal` provides normalized schedule/result rows. `v_auction_monitor` adds the latest earlier same-type, same-term result for the compact forward calendar.
 
-## 6. Serving and quality controls
+## 7. Data quality and operating rules
 
-- Use `v_auction_terminal` for the default screen and a materialized daily aggregate only when traffic justifies it.
-- Reject negative amounts, invalid CUSIPs, and duplicate business keys.
-- Reconcile `bid_to_cover_ratio` against tendered/offering data with tolerance; do not overwrite the official ratio.
-- Keep announcement and result polling idempotent with upsert on the composite business key.
-- Treat TreasuryDirect data as authoritative and label the terminal’s source timestamp visibly.
+- Upsert announcements and results idempotently on the composite business key.
+- Store API timestamps without an explicit offset as `America/New_York` source time before converting to `TIMESTAMPTZ`.
+- Reject negative amounts, invalid 9-character CUSIPs, impossible dates and duplicate business keys.
+- Reconcile the official bid-to-cover against **competitive tendered / public offering amount** within a documented tolerance; keep the official API ratio when rounding or methodology differs.
+- Do not interpret indirect bidder awards as a pure foreign-holder measure; present them as a demand-composition proxy.
+- Keep the visible source timestamp and whether the screen is live or using a verified fallback snapshot.
 
+The executable PostgreSQL 16 DDL is in `db/treasury_auction_schema.sql`.
