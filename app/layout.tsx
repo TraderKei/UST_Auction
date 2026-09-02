@@ -12,17 +12,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteOrigin = new URL("https://fv-treasury-auctions.no1-trader-kang.chatgpt.site");
-const title = "FV Terminal — U.S. Treasury Auctions";
-const description = "A modern primary-market terminal for U.S. Treasury auction schedules, compact prior results, demand signals, and data architecture.";
+const title = "UST AUCTION — 미국 국채 입찰";
+const description = "미국 국채 입찰 결과와 예정 일정, 응찰률 및 참여자별 낙찰 비중을 확인하는 다크 대시보드입니다.";
 
 export const metadata: Metadata = {
-  metadataBase: siteOrigin,
   title,
   description,
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
-  openGraph: { title, description, images: [{ url: "/og.png", width: 1200, height: 630, alt: "FV Terminal U.S. Treasury Auctions" }] },
-  twitter: { card: "summary_large_image", title, description, images: ["/og.png"] },
+  openGraph: { title, description },
+  twitter: { card: "summary", title, description },
 };
 
 export default function RootLayout({

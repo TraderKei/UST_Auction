@@ -14,28 +14,34 @@ async function render() {
   );
 }
 
-test("server-renders the Treasury auction terminal", async () => {
+test("server-renders the dark Treasury auction terminal (offline)", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => { throw new Error("Offline UI test"); });
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>FV Terminal — U\.S\. Treasury Auctions<\/title>/i);
-  assert.match(html, /U\.S\. Treasury Auctions/);
-  assert.match(html, /Forward calendar \+ prior result/);
-  assert.match(html, /Upcoming offering size/);
+  assert.match(html, /<title>UST AUCTION — 미국 국채 입찰<\/title>/i);
+  assert.match(html, /UST AUCTION/);
+  assert.match(html, /최근 입찰 결과/);
+  assert.match(html, /예정 입찰 일정/);
+  assert.match(html, /시장 동향/);
+  assert.match(html, /data-theme="dark"/);
+  assert.match(html, /282\.0/);
+  const visible = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, " ");
+  assert.doesNotMatch(visible, /CUSIP|Bid\s*\/\s*cover|Bid-to-cover|\bBTC\b|\d+(?:\.\d+)?\s*×/i);
   assert.match(html, /TreasuryDirect/);
   assert.doesNotMatch(html, /codex-preview|Building your site|react-loading-skeleton/i);
 });
 
-test("ships the API field map and executable database design", async () => {
+test("preserves the existing API field map and SQL design files (not DB execution)", async () => {
   const [dashboard, ddl, design] = await Promise.all([
-    readFile(new URL("../app/AuctionDashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/AuctionReference.tsx", import.meta.url), "utf8"),
     readFile(new URL("../db/treasury_auction_schema.sql", import.meta.url), "utf8"),
     readFile(new URL("../docs/API_AND_DB_DESIGN.md", import.meta.url), "utf8"),
   ]);
 
-  assert.match(dashboard, /120 RAW FIELDS/);
+  assert.match(dashboard, /API 필드/);
   assert.match(dashboard, /highDiscountMargin/);
   assert.match(ddl, /CREATE VIEW v_auction_monitor/);
   assert.match(ddl, /CONSTRAINT uq_auction_business_key UNIQUE \(cusip, auction_date, issue_date\)/);

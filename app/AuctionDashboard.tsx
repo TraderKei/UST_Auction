@@ -1,246 +1,174 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { TreasuryAuction } from "../lib/treasury";
+import { average, awardMix, percent, percentagePointChange, priorResult, securityName, signedPoints, stopName, subscription, subscriptionPercent, typeName } from "../lib/auction-display";
+import { auctionDateTime, dateOnly, displayInstant, scheduleRows, zoneLabel, type DisplayZone } from "../lib/auction-time";
+import { AllocationChart, AuctionLineChart } from "./AuctionCharts";
+import AuctionReference from "./AuctionReference";
 
-type Props = {
-  upcoming: TreasuryAuction[];
-  results: TreasuryAuction[];
-  source: "live" | "snapshot";
-  updatedAt: string;
-};
+type Props = { upcoming: TreasuryAuction[]; results: TreasuryAuction[]; source: "live" | "snapshot"; updatedAt: string; initialZone?: DisplayZone };
 type View = "market" | "api" | "database";
 type Tab = "calendar" | "results";
-
 const rowKey = (row: TreasuryAuction) => `${row.cusip}-${row.auctionDate}`;
-const compactMoney = (value: number | null) =>
-  value == null ? "—" : `$${(value / 1e9).toFixed(value < 10e9 ? 1 : 0)}B`;
-const share = (value: number | null, total: number | null) =>
-  value != null && total ? Math.max(0, (value / total) * 100) : 0;
-const dateParts = (iso: string) => {
-  const d = new Date(iso);
-  return {
-    date: d.toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" }).toUpperCase(),
-    day: d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }).toUpperCase(),
-  };
-};
-const fullDate = (iso: string) =>
-  iso ? new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit", timeZone: "UTC" }) : "—";
-const rate = (value: number | null) => (value == null ? "—" : `${value.toFixed(3)}%`);
-const shortTerm = (term: string) => term.replace("-Year", "Y").replace("-Week", "W");
+const money = (value: number | null | undefined) => value == null ? "N/A" : `$${(value / 1e9).toFixed(1)}B`;
+const price = (value: number | null | undefined) => value == null ? "N/A" : value.toFixed(4);
+const filters = ["All", "Bill", "Note", "Bond", "TIPS", "FRN"];
 
-const extractionGroups = [
-  {
-    title: "Identity & instrument",
-    tone: "blue",
-    fields: [
-      ["cusip", "Permanent security identifier"],
-      ["type / securityType", "Bill, Note, Bond, TIPS or FRN"],
-      ["term / securityTerm", "Auction tenor and issued tenor"],
-      ["maturityDate", "Final maturity"],
-      ["reopening / CMB", "Original issue and special bill flags"],
-    ],
-  },
-  {
-    title: "Calendar & terms",
-    tone: "violet",
-    fields: [
-      ["announcementDate", "Terms become official"],
-      ["auctionDate", "Competitive auction date"],
-      ["issueDate", "Settlement and issue date"],
-      ["closingTimeCompetitive", "Institutional bid deadline (ET)"],
-      ["offeringAmount", "Headline public offering"],
-    ],
-  },
-  {
-    title: "Clearing result",
-    tone: "mint",
-    fields: [
-      ["highYield / highDiscountRate", "Type-aware stop metric"],
-      ["highInvestmentRate / spread", "Bill return or FRN spread"],
-      ["pricePer100", "Uniform auction price"],
-      ["bidToCoverRatio", "Primary demand signal"],
-      ["allocationPercentage", "Proration at the stop"],
-    ],
-  },
-  {
-    title: "Demand composition",
-    tone: "amber",
-    fields: [
-      ["competitiveTendered / Accepted", "Competitive demand and awards"],
-      ["primaryDealer…", "Dealer bids and take-down"],
-      ["directBidder…", "Direct bidder participation"],
-      ["indirectBidder…", "Institutional and foreign proxy"],
-      ["SOMA / FIMA / retail", "Official and noncompetitive awards"],
-    ],
-  },
-];
+function AuctionDate({ row, zone, withTime = false }: { row: TreasuryAuction | undefined; zone: DisplayZone; withTime?: boolean }) {
+  const value = auctionDateTime(row, zone);
+  return <span className="date-cell"><span>{value.date}</span><small>{withTime ? `${value.time} · ` : ""}{value.basis}</small></span>;
+}
+function CalendarDate({ value }: { value: string | undefined }) {
+  return <span className="date-cell"><span>{dateOnly(value)}</span><small>원문 ET · 시각 없음</small></span>;
+}
 
-const tableCards = [
-  { name: "security_master", key: "cusip", copy: "Stable security reference data", cols: "type · original_term · maturity_date · tips · frn" },
-  { name: "auction", key: "auction_id", copy: "One row per announced auction", cols: "cusip · auction_date · issue_date · offering_amount · status" },
-  { name: "auction_result", key: "auction_id", copy: "One-to-one clearing outcome", cols: "stop_value · stop_metric · bid_to_cover · price_per_100" },
-  { name: "bidder_allocation", key: "auction_id + bidder_type", copy: "Normalized bidder take-down", cols: "tendered_amount · accepted_amount · acceptance_rate" },
-  { name: "source_snapshot", key: "snapshot_id", copy: "Immutable API lineage", cols: "endpoint · fetched_at · payload_hash · raw_payload" },
-  { name: "auction_source_link", key: "auction_id + snapshot_id", copy: "Record-to-payload traceability", cols: "auction_id · snapshot_id" },
-];
-
-export default function AuctionDashboard({ upcoming, results, source, updatedAt }: Props) {
+export default function AuctionDashboard({ upcoming, results, source, updatedAt, initialZone = "KST" }: Props) {
   const [view, setView] = useState<View>("market");
-  const [tab, setTab] = useState<Tab>("calendar");
+  const [tab, setTab] = useState<Tab>("results");
+  const [zone, setZone] = useState<DisplayZone>(initialZone);
   const [filter, setFilter] = useState("All");
-  const [selectedKey, setSelectedKey] = useState(upcoming[0] ? rowKey(upcoming[0]) : results[0] ? rowKey(results[0]) : "");
-
-  const universe = tab === "calendar" ? upcoming : results;
-  const filtered = useMemo(
-    () => universe.filter((row) => filter === "All" || row.type === filter),
-    [universe, filter],
-  );
-  const rows = filtered.slice(0, 11);
-  const selectedRow = filtered.find((row) => rowKey(row) === selectedKey) ?? rows[0] ?? filtered[0];
-  const comparableResult = (row: TreasuryAuction | undefined) =>
-    row ? results.find((result) => result.type === row.type && result.term === row.term && result.auctionDate < row.auctionDate)
-      ?? results.find((result) => result.type === row.type && result.term === row.term) : undefined;
-  const selectedResult = tab === "results"
-    ? results.find((row) => rowKey(row) === selectedKey) ?? results[0]
-    : comparableResult(selectedRow) ?? results[0];
-
-  const totalSupply = upcoming.reduce((sum, row) => sum + row.offeringAmount, 0);
-  const coverValues = results.flatMap((row) => row.bidToCover == null ? [] : [row.bidToCover]);
-  const avgCover = coverValues.length ? coverValues.reduce((sum, value) => sum + value, 0) / coverValues.length : 0;
-  const latestIndirect = selectedResult ? share(selectedResult.indirectAccepted, selectedResult.totalAccepted) : 0;
-  const otherShare = selectedResult
-    ? Math.max(0, 100 - share(selectedResult.indirectAccepted, selectedResult.totalAccepted) - share(selectedResult.directAccepted, selectedResult.totalAccepted) - share(selectedResult.dealerAccepted, selectedResult.totalAccepted))
-    : 0;
-
-  const chartRows = (tab === "calendar" ? upcoming : results)
-    .filter((row) => filter === "All" || row.type === filter)
-    .slice(0, 9)
-    .reverse();
-  const chartValues = chartRows.map((row) => tab === "calendar" ? row.offeringAmount / 1e9 : row.bidToCover ?? 0);
-  const chartMax = Math.max(tab === "calendar" ? 110 : 3.6, ...chartValues);
-  const chartSummary = tab === "calendar"
-    ? compactMoney(chartRows.reduce((sum, row) => sum + row.offeringAmount, 0))
-    : `${(chartRows.reduce((sum, row) => sum + (row.bidToCover ?? 0), 0) / Math.max(1, chartRows.filter((row) => row.bidToCover != null).length)).toFixed(2)}×`;
-
-  const stamp = new Date(updatedAt).toLocaleString("en-US", {
-    month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/New_York", timeZoneName: "short",
-  });
-  const nav = (next: View) => {
-    setView(next);
-    if (next === "market") setTab("calendar");
-  };
+  const [selectedKey, setSelectedKey] = useState("");
+  const resultRef = useRef<HTMLElement>(null);
+  const calendarRef = useRef<HTMLElement>(null);
+  const planned = useMemo(() => scheduleRows(upcoming, updatedAt), [upcoming, updatedAt]);
+  const resultRows = useMemo(() => results.filter(row => filter === "All" || row.type === filter), [results, filter]);
+  const calendarRows = useMemo(() => planned.filter(row => filter === "All" || row.type === filter), [planned, filter]);
+  const filtered = tab === "calendar" ? calendarRows : resultRows;
+  const selectedRow = filtered.find(row => rowKey(row) === selectedKey) ?? filtered[0];
+  const selectedResult = tab === "results" ? selectedRow : priorResult(selectedRow, results);
+  const previous = priorResult(selectedResult, results);
+  const mix = awardMix(selectedResult);
+  const previousMix = awardMix(previous);
+  const historicalRows = selectedResult ? results.filter(row => row.type === selectedResult.type && row.term === selectedResult.term && row.auctionDate < selectedResult.auctionDate)
+    .sort((a, b) => b.auctionDate.localeCompare(a.auctionDate)).slice(0, 6) : [];
+  const validPrevious = historicalRows.map(row => subscriptionPercent(row.bidToCover)).filter((value): value is number => value != null);
+  const avgSubscription = average(validPrevious);
+  const subscriptionDelta = percentagePointChange(subscriptionPercent(selectedResult?.bidToCover), avgSubscription);
+  const chartRows = resultRows.slice(0, 9).reverse();
+  const stopRows = selectedResult ? [selectedResult, ...historicalRows].reverse() : [];
+  const nextBill = planned.find(row => row.type === "Bill");
+  const stamp = displayInstant(updatedAt, zone);
+  const selectedTime = auctionDateTime(selectedRow, zone);
   const changeTab = (next: Tab) => {
-    setTab(next);
-    const nextRows = next === "calendar" ? upcoming : results;
-    if (nextRows[0]) setSelectedKey(rowKey(nextRows[0]));
+    setView("market"); setTab(next); setFilter("All"); setSelectedKey("");
+    (next === "calendar" ? calendarRef : resultRef).current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  const select = (row: TreasuryAuction, next: Tab) => { setView("market"); setTab(next); setSelectedKey(rowKey(row)); };
+  const selectResult = (row: TreasuryAuction) => select(row, "results");
 
-  return (
-    <main className="terminal-shell">
-      <aside className="rail" aria-label="Product navigation">
-        <div className="brand-mark">FV</div>
-        <button className={`rail-item ${view === "market" ? "active" : ""}`} onClick={() => nav("market")} aria-label="Auction monitor"><span>AU</span><small>Monitor</small></button>
-        <button className={`rail-item ${view === "api" ? "active" : ""}`} onClick={() => nav("api")} aria-label="API field map"><span>AP</span><small>Fields</small></button>
-        <button className={`rail-item ${view === "database" ? "active" : ""}`} onClick={() => nav("database")} aria-label="Database blueprint"><span>DB</span><small>Model</small></button>
-        <span className="rail-spacer" />
-        <a className="rail-item help" href="https://www.treasurydirect.gov/auctions/upcoming/" target="_blank" rel="noreferrer" aria-label="TreasuryDirect source"><span>TD</span><small>Source</small></a>
+  return <div className="terminal-shell" data-theme="dark">
+    <header className="topbar">
+      <button className="brand" onClick={() => { setView("market"); setTab("results"); setFilter("All"); setSelectedKey(""); }} aria-label="UST AUCTION 처음으로"><span className="bank" aria-hidden="true" /><span>UST AUCTION</span></button>
+      <nav className="nav" aria-label="주요 메뉴">
+        <button className={view === "market" && tab === "calendar" ? "active" : ""} aria-pressed={view === "market" && tab === "calendar"} onClick={() => changeTab("calendar")}>입찰 일정</button>
+        <button className={view === "market" && tab === "results" ? "active" : ""} aria-pressed={view === "market" && tab === "results"} onClick={() => changeTab("results")}>입찰 결과</button>
+        <button className={view === "api" ? "active" : ""} aria-pressed={view === "api"} onClick={() => setView("api")}>API 필드</button>
+        <button className={view === "database" ? "active" : ""} aria-pressed={view === "database"} onClick={() => setView("database")}>데이터 구조</button>
+      </nav>
+      <div className="top-right"><div className="zone-switch" role="group" aria-label="날짜·시간 기준 선택">
+        <button aria-pressed={zone === "KST"} className={zone === "KST" ? "selected" : ""} onClick={() => setZone("KST")}>한국 (KST)</button>
+        <button aria-pressed={zone === "ET"} className={zone === "ET" ? "selected" : ""} onClick={() => setZone("ET")}>미국 동부 (ET)</button>
+      </div><span className={`source-badge ${source}`}>{source === "live" ? "API 수신" : "표본 자료"}</span></div>
+    </header>
+    <div className="time-strip" aria-live="polite"><span>표시 기준: <b>{zoneLabel(zone)}</b> · 날짜 형식 YYYY-MM-DD</span><span>자료 기준: <b>{stamp.full}</b></span></div>
+    <div className={`data-status ${source}`} role="status">
+      {source === "snapshot" ? "저장된 표본입니다. 최신 결과·현재 이후 일정을 확인한 자료가 아니며, 예정 일정도 표본 저장 시점 기준입니다." : "기존 TreasuryDirect API 수신 자료입니다. 이후 일정은 자료 기준 시각 이후의 수신 목록입니다."}
+      <span>N/A = 자료 없음 · 시각 없는 날짜는 원문 ET 유지</span>
+    </div>
+
+    {view === "market" ? <main className="dashboard">
+      <aside className="left-rail">
+        <section className="panel latest-panel">
+          <header className="side-title"><h2 className="panel-heading">{tab === "results" && selectedRow === results[0] ? "최근 입찰" : "선택 입찰"}</h2><span className="released">{tab === "results" ? "결과" : "예정"}</span></header>
+          <div className="latest-body">
+            <div className="security-row"><h1>{securityName(selectedRow)}</h1>{selectedRow?.reopening && <span className="reopening">재발행</span>}</div>
+            <div className="side-rule" />
+            <dl className="facts">
+              <div><dt>입찰일</dt><dd><AuctionDate row={selectedRow} zone={zone} /></dd></div>
+              <div><dt>입찰시각</dt><dd>{selectedTime.time}<small className="basis-note">{selectedTime.basis}</small></dd></div>
+              <div><dt>결제일</dt><dd><CalendarDate value={selectedRow?.issueDate} /></dd></div>
+              <div><dt>발행금액</dt><dd>{money(selectedRow?.offeringAmount)}</dd></div>
+              <div><dt>쿠폰금리</dt><dd>{percent(selectedRow?.couponRate, 3)}</dd></div>
+              <div><dt>만기일</dt><dd><CalendarDate value={selectedRow?.maturityDate} /></dd></div>
+            </dl>
+            <div className="side-rule" /><p className="subtle">표나 차트에서 입찰을 선택하면 주요 결과가 바뀝니다.</p>
+          </div>
+        </section>
+        <section className="panel quick">
+          <h2 className="panel-heading">일정 한눈에 보기</h2>
+          <div className="quick-item"><i className="quick-icon green" aria-hidden="true" /><div><small>{source === "snapshot" ? "표본 기준 예정 입찰" : "다음 예정 입찰"}</small><b>{securityName(planned[0])}</b></div></div>
+          {planned[0] && <p className="quick-date">{auctionDateTime(planned[0], zone).full}</p>}
+          <div className="quick-item"><i className="quick-icon pink" aria-hidden="true" /><div><small>{source === "snapshot" ? "표본 기준 단기채 일정" : "다음 단기채 입찰"}</small><b>{nextBill ? securityName(nextBill) : "자료 없음"}</b></div></div>
+          {nextBill && <p className="quick-date">{auctionDateTime(nextBill, zone).full}</p>}
+          <div className="quick-item"><small>표시 예정 물량 합계</small><b>{money(planned.reduce((sum, row) => sum + row.offeringAmount, 0))}</b></div>
+          <div className="quick-item"><small>수신 결과</small><b>{results.length}건</b></div>
+          <button className="calendar-btn" onClick={() => changeTab("calendar")}>예정 일정 보기 <span aria-hidden="true">→</span></button>
+        </section>
       </aside>
 
-      <section className="workspace">
-        <header className="topbar">
-          <div><div className="eyebrow">FIXED INCOME / PRIMARY MARKET</div><h1>{view === "market" ? "U.S. Treasury Auctions" : view === "api" ? "TreasuryDirect Field Map" : "Auction Data Blueprint"}</h1></div>
-          <div className="top-actions"><span className={`live-dot ${source}`} /><b>{source === "live" ? "LIVE API" : "VERIFIED SNAPSHOT"}</b><span className="clock">{stamp}</span></div>
-        </header>
+      <section className="main-area" aria-label="입찰 대시보드">
+        <section className="panel key-results">
+          <div className="section-heading"><h2 className="panel-heading underlined">주요 입찰 결과</h2><span>{tab === "calendar" ? "직전 비교 결과: " : "선택 결과: "}{securityName(selectedResult)}{selectedResult ? ` · ${auctionDateTime(selectedResult, zone).full}` : ""}</span></div>
+          <div className="kpis">
+            <article className="kpi subscription-kpi"><h3>응찰률 (%)</h3><strong className="kpi-value green-text">{subscription(selectedResult?.bidToCover)}</strong><div className="kpi-bottom"><div><small>직전 평균 · 유효 {validPrevious.length}/{historicalRows.length}건</small><b>{percent(avgSubscription)}</b></div><div><small>평균 대비</small><b>{signedPoints(subscriptionDelta)}</b></div></div></article>
+            <article className="kpi"><h3>{stopName(selectedResult)}</h3><strong className="kpi-value">{percent(selectedResult?.stopRate, 3)}</strong><div className="kpi-bottom"><div><small>When-Issued</small><b>N/A</b></div><div><small>Tail (bp)</small><b>N/A</b></div></div></article>
+            {["간접낙찰률", "직접낙찰률", "PD낙찰률"].map((label, index) => {
+              const difference = percentagePointChange(mix?.[index], previousMix?.[index]);
+              return <article className="kpi bidder-kpi" key={label}><h3>{label}</h3><strong className="kpi-value green-text">{percent(mix?.[index])}</strong><div className="kpi-bottom"><div><small>직전 입찰 대비</small><b className={difference == null ? "subtle" : difference > 0 ? "green-text" : difference < 0 ? "red-text" : ""}>{signedPoints(difference)}</b></div></div></article>;
+            })}
+            <article className="kpi"><h3>Allotted at High</h3><strong className="kpi-value unavailable">N/A</strong><div className="kpi-bottom"><div><small>최고 낙찰금리 배정률</small><b>자료 미연결</b></div></div></article>
+          </div>
+          <p className="comparison-note">낙찰률: 전체 낙찰액 대비 비중 · 증감: 동일 종류·만기의 직전 입찰 대비 %p{previous ? ` · 비교 입찰: ${auctionDateTime(previous, zone).full}` : " · 비교 자료 없음"}</p>
+        </section>
+        <section className="panel charts" aria-label="입찰 차트">
+          <article className="chart-cell"><h2 className="panel-heading">낙찰 금리</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {stopRows.length}건</p><AuctionLineChart rows={stopRows} kind="stop" onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch blue" />{stopName(selectedResult)}</span><span className="subtle">When-Issued 미연결</span></div></article>
+          <article className="chart-cell"><h2 className="panel-heading">참여자별 낙찰 비중 (%)</h2><p className="chart-subtitle">최근 {chartRows.length}건 · 전체 낙찰액 기준</p><AllocationChart rows={chartRows} onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch green" />간접</span><span><i className="swatch blue" />직접</span><span><i className="swatch purple" />PD</span><span><i className="swatch gray" />기타</span></div></article>
+          <article className="chart-cell"><h2 className="panel-heading">응찰률 (%)</h2><p className="chart-subtitle">최근 {chartRows.length}건 · {filter === "All" ? "전체 종류·만기" : typeName(filter)} · 입찰별 비교</p><AuctionLineChart rows={chartRows} kind="subscription" onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch pink" />응찰률 (%)</span></div></article>
+        </section>
 
-        <div className="ticker" aria-label="Auction context strip">
-          <span>NEXT <b>{upcoming[0] ? `${dateParts(upcoming[0].auctionDate).date} · ${upcoming[0].term}` : "—"}</b></span>
-          <span>OFFERING <b>{compactMoney(upcoming[0]?.offeringAmount ?? null)}</b></span>
-          <span>LATEST STOP <b>{selectedResult ? `${rate(selectedResult.stopRate)} · ${selectedResult.term}` : "—"}</b></span>
-          <span>BID / COVER <b>{selectedResult?.bidToCover?.toFixed(2) ?? "—"}×</b></span>
-          <span className="source-note">SOURCE · TREASURYDIRECT TA_WS</span>
-        </div>
-
-        {view === "market" && <div className="content">
-          <section className="hero-row">
-            <div><div className="section-kicker">AUCTION PULSE</div><h2>Primary supply, distilled.</h2><p className="hero-copy">Official terms beside the latest comparable clearing signal.</p></div>
-            <div className="metric"><span>Next auction</span><strong>{upcoming[0] ? dateParts(upcoming[0].auctionDate).date : "—"}</strong><small>{upcoming[0]?.term} {upcoming[0]?.type}</small></div>
-            <div className="metric"><span>Announced supply</span><strong>{compactMoney(totalSupply)}</strong><small>{upcoming.length} upcoming lines</small></div>
-            <div className="metric"><span>Avg. bid / cover</span><strong>{avgCover.toFixed(2)}×</strong><small className="positive">Latest {coverValues.length} auctions</small></div>
-          </section>
-
-          <section className="dashboard-grid">
-            <article className="panel schedule-panel">
-              <div className="panel-head panel-head-wrap">
-                <div><span className="section-kicker">AUCTION TAPE</span><h3>{tab === "calendar" ? "Forward calendar + prior result" : "Recent clearing results"}</h3></div>
-                <div className="panel-controls">
-                  <div className="segmented tabs" aria-label="Dataset"><button className={tab === "calendar" ? "selected" : ""} onClick={() => changeTab("calendar")}>Calendar <b>{upcoming.length}</b></button><button className={tab === "results" ? "selected" : ""} onClick={() => changeTab("results")}>Results <b>{results.length}</b></button></div>
-                  <div className="filter-row" aria-label="Security filter">{["All", "Bill", "Note", "Bond", "TIPS", "FRN"].map((name) => <button key={name} className={filter === name ? "selected" : ""} onClick={() => setFilter(name)}>{name}</button>)}</div>
-                </div>
-              </div>
-              <div className="table-wrap"><table><thead><tr>{tab === "calendar" ? <><th>Auction</th><th>Security</th><th>Offering</th><th>Comp. close</th><th>Settlement</th><th>Last comparable</th></> : <><th>Auction</th><th>Security</th><th>Stop</th><th>Bid / cover</th><th>Offering</th><th>Indirect</th></>}</tr></thead>
-                <tbody>{rows.map((row) => {
-                  const dp = dateParts(row.auctionDate);
-                  const prior = comparableResult(row);
-                  const indirect = share(row.indirectAccepted, row.totalAccepted);
-                  return <tr key={rowKey(row)} className={selectedRow && rowKey(selectedRow) === rowKey(row) ? "row-selected" : ""} onClick={() => setSelectedKey(rowKey(row))}>
-                    <td><b>{dp.date}</b><small>{dp.day}</small></td>
-                    <td><div className="security-cell"><b>{row.term}</b><span className={`type-badge ${row.type.toLowerCase()}`}>{row.type}</span></div><small>{row.cusip}{row.reopening ? " · REOPEN" : ""}</small></td>
-                    {tab === "calendar" ? <>
-                      <td className="mono strong">{compactMoney(row.offeringAmount)}</td>
-                      <td><b className="mono">{row.closingTimeCompetitive}</b><small>Eastern Time</small></td>
-                      <td><b>{fullDate(row.issueDate)}</b><small>Matures {fullDate(row.maturityDate)}</small></td>
-                      <td><b className="mono">{prior ? rate(prior.stopRate) : "—"}</b><small>{prior ? `${prior.stopLabel} · ${prior.bidToCover?.toFixed(2) ?? "—"}×` : "No comparable result"}</small></td>
-                    </> : <>
-                      <td><b className="mono">{rate(row.stopRate)}</b><small>{row.stopLabel}</small></td>
-                      <td><b className="mono cover">{row.bidToCover?.toFixed(2)}×</b><small>{compactMoney(row.totalTendered)} tendered</small></td>
-                      <td className="mono strong">{compactMoney(row.offeringAmount)}</td>
-                      <td><b className="mono">{indirect.toFixed(1)}%</b><small>{compactMoney(row.indirectAccepted)} accepted</small></td>
-                    </>}
+        <div className="list-controls"><span>결과·예정 일정 종류</span><div className="filter-row" aria-label="국채 종류 필터">{filters.map(name => <button key={name} className={filter === name ? "selected" : ""} aria-pressed={filter === name} onClick={() => { setFilter(name); setSelectedKey(""); }}>{name === "All" ? "전체" : typeName(name)}</button>)}</div></div>
+        <section className="bottom-row">
+          <div className="auction-lists">
+            <section className="panel results-panel" id="auction-results" ref={resultRef}>
+              <div className="section-heading"><h2 className="panel-heading">최근 입찰 결과</h2><span>{zoneLabel(zone)} · 시각 없는 자료는 원문 ET</span></div>
+              {/* 키보드로 긴 표를 스크롤할 수 있게 하는 포커스 영역입니다. */}
+              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+              <div className="table-wrap" tabIndex={0} role="region" aria-label="최근 입찰 결과표"><table>
+                <thead><tr><th>입찰일 · 기준</th><th>만기 / 종류</th><th>발행금액</th><th>낙찰금리 (%)</th><th>응찰률 (%)</th><th>배정률 (%)</th><th>간접 (%)</th><th>직접 (%)</th><th>PD (%)</th><th>낙찰가격 ($100)</th></tr></thead>
+                <tbody>{resultRows.map(row => {
+                  const allocation = awardMix(row);
+                  const selected = tab === "results" && selectedRow && rowKey(selectedRow) === rowKey(row);
+                  return <tr key={rowKey(row)} className={selected ? "row-selected" : ""} onClick={() => select(row, "results")}>
+                    <td><button className="row-select" aria-label={`${auctionDateTime(row, zone).full} ${securityName(row)} 결과 선택`} aria-pressed={!!selected} onClick={() => select(row, "results")} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(row, "results"); } }}><AuctionDate row={row} zone={zone} /></button></td>
+                    <td>{securityName(row)} {row.reopening && <span className="reopen-badge">재발행</span>}</td><td>{money(row.offeringAmount)}</td>
+                    <td title={stopName(row)}>{percent(row.stopRate, 3)}</td><td className="subscription-cell">{subscription(row.bidToCover)}</td><td className="unavailable">N/A</td>
+                    <td>{percent(allocation?.[0])}</td><td>{percent(allocation?.[1])}</td><td>{percent(allocation?.[2])}</td><td>{price(row.pricePer100)}</td>
                   </tr>;
-                })}{!rows.length && <tr><td colSpan={6} className="empty-state">No {filter} auctions in this window.</td></tr>}</tbody>
-              </table></div>
-              <div className="table-foot"><span><i /> Select a row to update the context panels</span><span>Times ET · amounts USD · source TreasuryDirect</span></div>
-            </article>
-
-            <div className="right-stack">
-              <article className="panel chart-panel">
-                <div className="panel-head"><div><span className="section-kicker">{tab === "calendar" ? "SUPPLY PROFILE" : "DEMAND SIGNAL"}</span><h3>{tab === "calendar" ? "Upcoming offering size" : "Bid-to-cover trend"}</h3></div><span className="range">LATEST {chartRows.length}</span></div>
-                <div className="chart-summary"><strong>{chartSummary}</strong><span>{tab === "calendar" ? "displayed supply" : "window average"}</span></div>
-                <div className="bar-chart" aria-label={tab === "calendar" ? "Upcoming offering amount bar chart" : "Recent bid-to-cover bar chart"}>{chartRows.map((row, index) => {
-                  const value = chartValues[index];
-                  return <button className="bar-column" key={rowKey(row)} onClick={() => setSelectedKey(rowKey(row))} aria-label={`${row.term} ${tab === "calendar" ? compactMoney(row.offeringAmount) : `${row.bidToCover} times`}`}>
-                    <span className="bar-value">{tab === "calendar" ? `$${Math.round(value)}B` : value.toFixed(2)}</span>
-                    <div className={`bar ${selectedRow && rowKey(selectedRow) === rowKey(row) ? "focus" : ""}`} style={{ height: `${(value / chartMax) * 100}%` }} />
-                    <small>{shortTerm(row.term)}</small>
-                  </button>;
-                })}</div>
-              </article>
-
-              {selectedResult && <article className="panel allocation-panel">
-                <div className="panel-head"><div><span className="section-kicker">{tab === "calendar" ? "LAST COMPARABLE RESULT" : "SELECTED RESULT"}</span><h3>{selectedResult.term} {selectedResult.type}</h3></div><span className="cusip">{selectedResult.cusip}</span></div>
-                <div className="allocation-hero"><div><span>{selectedResult.stopLabel}</span><strong>{rate(selectedResult.stopRate)}</strong></div><div><span>Bid / cover</span><strong>{selectedResult.bidToCover?.toFixed(2) ?? "—"}×</strong></div><div><span>Indirect</span><strong>{latestIndirect.toFixed(1)}%</strong></div></div>
-                <div className="mix-label"><span>Award mix</span><b>{compactMoney(selectedResult.totalAccepted)} total accepted</b></div>
-                <div className="mix-bar" aria-label="Accepted awards by bidder type"><span className="indirect" style={{ width: `${share(selectedResult.indirectAccepted, selectedResult.totalAccepted)}%` }} /><span className="direct" style={{ width: `${share(selectedResult.directAccepted, selectedResult.totalAccepted)}%` }} /><span className="dealer" style={{ width: `${share(selectedResult.dealerAccepted, selectedResult.totalAccepted)}%` }} /><span className="other" style={{ width: `${otherShare}%` }} /></div>
-                <div className="legend"><span><i className="indirect" />Indirect <b>{share(selectedResult.indirectAccepted, selectedResult.totalAccepted).toFixed(1)}%</b></span><span><i className="direct" />Direct <b>{share(selectedResult.directAccepted, selectedResult.totalAccepted).toFixed(1)}%</b></span><span><i className="dealer" />Dealer <b>{share(selectedResult.dealerAccepted, selectedResult.totalAccepted).toFixed(1)}%</b></span><span><i className="other" />Other <b>{otherShare.toFixed(1)}%</b></span></div>
-              </article>}
-            </div>
-          </section>
-        </div>}
-
-        {view === "api" && <div className="content reference-page">
-          <section className="reference-hero"><div><span className="section-kicker">120 RAW FIELDS → COMPACT CORE MODEL</span><h2>Extract signal. Retain lineage.</h2><p>The two TreasuryDirect feeds share the same wide string-based schema. Announcement records leave outcome fields blank; result records populate them. The serving layer converts empty strings to NULL and chooses a security-aware stop metric.</p></div><div className="endpoint-stack"><code>GET /TA_WS/securities/announced?format=json</code><code>GET /TA_WS/securities/auctioned?format=json&amp;day=45</code></div></section>
-          <div className="extraction-grid">{extractionGroups.map((group, groupIndex) => <article className={`field-card ${group.tone}`} key={group.title}><div className="field-card-head"><span>{String(groupIndex + 1).padStart(2, "0")}</span><h3>{group.title}</h3></div>{group.fields.map(([field, copy]) => <div className="field-row" key={field}><code>{field}</code><p>{copy}</p></div>)}</article>)}</div>
-          <section className="logic-strip"><div><span>01</span><b>Parse</b><small>"" → NULL · money → DECIMAL(20,2) · market dates → DATE</small></div><div><span>02</span><b>Unify stop</b><small>Bill = highDiscountRate · coupon = highYield · FRN = highDiscountMargin</small></div><div><span>03</span><b>Match prior</b><small>Same security type + term, latest result before the auction date</small></div><div><span>04</span><b>Preserve</b><small>Raw JSON + SHA-256 payload hash retained for audit replay</small></div></section>
-        </div>}
-
-        {view === "database" && <div className="content reference-page">
-          <section className="reference-hero database-hero"><div><span className="section-kicker">POSTGRESQL · IDEMPOTENT · AUDITABLE</span><h2>Normalized core, terminal-ready view.</h2><p>Stable instrument identity, auction events, one-to-one results and repeating bidder allocations are separated. Immutable source snapshots make every displayed value traceable to TreasuryDirect.</p></div><div className="db-stat"><span>Core tables</span><strong>6</strong><small>+ 2 serving views</small></div></section>
-          <section className="pipeline" aria-label="Data processing flow"><div><span>INGEST</span><b>TreasuryDirect API</b><small>15-minute baseline poll</small></div><i>→</i><div><span>RAW</span><b>source_snapshot</b><small>Immutable JSONB</small></div><i>→</i><div><span>CORE</span><b>auction + result</b><small>Typed relational data</small></div><i>→</i><div><span>SERVE</span><b>v_auction_monitor</b><small>Schedule + prior result</small></div></section>
-          <div className="schema-grid">{tableCards.map((table) => <article className="schema-card" key={table.name}><div className="schema-top"><h3>{table.name}</h3><span>{table.key}</span></div><p>{table.copy}</p><code>{table.cols}</code></article>)}</div>
-          <section className="index-panel"><div><span className="section-kicker">QUERY-FIRST INDEXES</span><h3>Optimized for the terminal’s hot paths</h3></div><div className="index-list"><code>(status, auction_date) WHERE status != 'resulted'</code><span>Forward calendar</span><code>(security_term, auction_date DESC)</code><span>Comparable prior result</span><code>(cusip, auction_date DESC)</code><span>Security history</span></div></section>
-        </div>}
+                })}{!resultRows.length && <tr><td colSpan={10} className="empty-state">결과 없음 · 조건에 맞는 입찰 결과가 없습니다.</td></tr>}</tbody>
+              </table></div><div className="table-foot"><span>{resultRows.length}건 · 선택 시 주요 결과 갱신</span><span>금액 USD · $B = 십억 달러</span></div>
+            </section>
+            <section className="panel schedule-panel" id="auction-calendar" ref={calendarRef}>
+              <div className="section-heading"><h2 className="panel-heading">예정 입찰 일정</h2><span>{source === "snapshot" ? "표본 기준 예정 · 최신 일정 미확인" : "자료 기준 시각 이후 예정"}</span></div>
+              <p className="schedule-note">기준 시각: {stamp.full} · {source === "snapshot" ? "이전 표본의 일정이며, 현재 이후 실제 계획은 아직 확인되지 않았습니다." : "발표되어 수신된 일정만 표시하며, 아직 공고되지 않은 계획은 포함하지 않습니다."}</p>
+              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+              <div className="table-wrap" tabIndex={0} role="region" aria-label="예정 입찰 일정표"><table>
+                <thead><tr><th>예정 입찰일시 · 기준</th><th>만기 / 종류</th><th>발행 예정액</th><th>결제일 (원문 ET)</th><th>직전 낙찰금리</th><th>직전 응찰률 (%)</th></tr></thead>
+                <tbody>{calendarRows.map(row => {
+                  const prior = priorResult(row, results);
+                  const selected = tab === "calendar" && selectedRow && rowKey(selectedRow) === rowKey(row);
+                  return <tr key={rowKey(row)} className={selected ? "row-selected" : ""} onClick={() => select(row, "calendar")}>
+                    <td><button className="row-select" aria-label={`${auctionDateTime(row, zone).full} ${securityName(row)} 일정 선택`} aria-pressed={!!selected} onClick={() => select(row, "calendar")} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(row, "calendar"); } }}><AuctionDate row={row} zone={zone} withTime /></button></td>
+                    <td>{securityName(row)} {row.reopening && <span className="reopen-badge">재발행</span>}</td><td>{money(row.offeringAmount)}</td><td><CalendarDate value={row.issueDate} /></td><td>{percent(prior?.stopRate, 3)}</td><td>{subscription(prior?.bidToCover)}</td>
+                  </tr>;
+                })}{!calendarRows.length && <tr><td colSpan={6} className="empty-state">조건에 맞는 예정 일정이 없습니다. 미공고·미수신 계획은 표시하지 않습니다.</td></tr>}</tbody>
+              </table></div><div className="table-foot"><span>예정 {calendarRows.length}건 · 결과표와 함께 표시</span><span>{zoneLabel(zone)}</span></div>
+            </section>
+          </div>
+          <aside className="panel market"><h2 className="panel-heading">시장 동향</h2>{["10년물 금리", "2년물 금리", "30년물 금리"].map(label => <div className="market-card" key={label}><div><span>{label}</span><small>미연결</small></div><strong>N/A</strong><div className="market-placeholder" aria-hidden="true" /></div>)}<p className="market-asof">시장금리·기준 시각은 후속 단계에서 검증합니다. 입찰금리로 대체하지 않습니다.</p></aside>
+        </section>
       </section>
-    </main>
-  );
+    </main> : <AuctionReference view={view} />}
+    <footer><span>출처: <a href="https://www.treasurydirect.gov/auctions/upcoming/" target="_blank" rel="noreferrer">미국 재무부 · TreasuryDirect</a></span><span>금액 USD · 표시 시각 {zoneLabel(zone)}</span><span>화면 검토용 · 투자 판단용 아님</span></footer>
+  </div>;
 }
