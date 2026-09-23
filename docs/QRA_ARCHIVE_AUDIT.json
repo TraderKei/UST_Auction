@@ -1,0 +1,65 @@
+[
+  {
+    "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/quarterly-refunding-financing-estimates-by-calendar-year",
+    "links_2026": 3,
+    "types": {
+      "FINANCING_ESTIMATES_HTML": 3
+    }
+  },
+  {
+    "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/official-remarks-on-quarterly-refunding-by-calendar-year",
+    "links_2026": 3,
+    "types": {
+      "POLICY_STATEMENT_HTML": 3
+    }
+  },
+  {
+    "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/office-of-economic-policy-statements-to-tbac",
+    "links_2026": 3,
+    "types": {
+      "ECONOMIC_POLICY_STATEMENT_HTML": 3
+    }
+  },
+  {
+    "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/treasury-borrowing-advisory-committee-discussion-charts-by-calendar-year",
+    "links_2026": 3,
+    "types": {
+      "TBAC_CHARGE_PDF": 3
+    }
+  },
+  {
+    "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/treasury-borrowing-advisory-committee-report-to-the-secretary-by-calendar-year",
+    "links_2026": 3,
+    "types": {
+      "TBAC_REPORT_HTML": 3
+    }
+  },
+  {
+    "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/tbac-recommended-financing-tables-by-calendar-year",
+    "links_2026": 3,
+    "types": {
+      "TBAC_RECOMMENDED_FINANCING_PDF": 3
+    }
+  },
+  {
+    "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/treasury-borrowing-advisory-committee-meeting-minutes-by-calendar-year",
+    "links_2026": 3,
+    "types": {
+      "TBAC_MINUTES_HTML": 3
+    }
+  },
+  {
+    "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/primary-dealer-meeting-agendas-by-calendar-year",
+    "links_2026": 3,
+    "types": {
+      "PRIMARY_DEALER_AGENDA_PDF": 3
+    }
+  },
+  {
+    "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/primary-dealer-auction-size-survey",
+    "links_2026": 1,
+    "types": {
+      "PRIMARY_DEALER_SURVEY_PDF": 1
+    }
+  }
+]

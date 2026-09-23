@@ -1,0 +1,15 @@
+{
+  "checked_at": "2026-09-03T07:55:13.086928+00:00",
+  "endpoint": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/auctions_query",
+  "rows": 11100,
+  "meta_total_count": 11100,
+  "pages": 3,
+  "null_key_counts": {},
+  "duplicate_key_groups": 0,
+  "duplicate_examples": [],
+  "raw_paths": [
+    "work\\source-audit\\raw\\fiscal-auctions\\2026\\09\\03\\cc13d20b043fbd5dbc718d03740855226e1d4645e30131b73a4a266c1bdc0b7d.json",
+    "work\\source-audit\\raw\\fiscal-auctions\\2026\\09\\03\\d23807f2b112c2755047838527e6bef3351e28a796593bdf6f994dbd7a6fa0e9.json",
+    "work\\source-audit\\raw\\fiscal-auctions\\2026\\09\\03\\9c2c73a173ab7a9176c66037d8acfacb38a6d0dcccd97e3f989c00470abd7a36.json"
+  ]
+}

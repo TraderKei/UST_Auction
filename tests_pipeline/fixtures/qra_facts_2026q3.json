@@ -1,0 +1,19 @@
+{
+  "fixture_only": true,
+  "source_url": "https://home.treasury.gov/system/files/221/TreasuryPresentationToTBACQ32026.pdf",
+  "source_sha256": "c05a7215f47bdda6167f54efe6c17e92489a002116ab72066dc67131ba77067b",
+  "unit": "USD_bn",
+  "borrowing": {"current": 739, "prior": 671, "delta": 68, "next": 628},
+  "tga": {"actual_start": 919, "quarter_end": 950, "intermediate_peak": 1050, "peak_range": 50, "next_quarter_end": 850},
+  "supply": {
+    "terms": ["2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"],
+    "gross": [207, 174, 210, 132, 120, 42, 69],
+    "net": [15, 56, 50, 72, 66, 42, 65],
+    "weights": [0.20, 0.30, 0.50, 0.70, 1.00, 1.65, 2.05]
+  },
+  "financing_mix": [
+    {"implied_bills": 409, "net_coupon": 375, "assumed_buybacks": 45},
+    {"implied_bills": 317, "net_coupon": 361, "assumed_buybacks": 50}
+  ]
+}
+

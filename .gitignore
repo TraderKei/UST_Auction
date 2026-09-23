@@ -40,3 +40,13 @@ yarn-error.log*
 /.wrangler/
 /outputs/
 /work/
+
+# Standalone Python data pipeline
+/.venv/
+/.pytest_cache/
+__pycache__/
+*.egg-info/
+/.coverage
+/data/
+!/\.env.example
+!.env.example

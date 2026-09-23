@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools==80.9.0", "wheel==0.45.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ust-auction-qra-pipeline"
+version = "0.1.0"
+description = "U.S. Treasury auction and Quarterly Refunding ingestion pipeline"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic==1.16.5",
+  "httpx==0.28.1",
+  "lxml==6.0.1",
+  "openpyxl==3.1.5",
+  "pdfplumber==0.11.7",
+  "psycopg[binary]==3.2.10",
+  "pydantic==2.11.7",
+  "pydantic-settings==2.10.1",
+  "pypdf==6.0.0",
+  "SQLAlchemy==2.0.43",
+  "truststore==0.10.4",
+  "xlrd==2.0.2",
+]
+
+[project.optional-dependencies]
+test = [
+  "pglast==7.7",
+  "pytest==8.4.1",
+  "pytest-cov==6.2.1",
+  "xlwt==1.3.0",
+]
+
+[project.scripts]
+ust-data = "ust_pipeline.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests_pipeline"]
+markers = [
+  "integration: requires a PostgreSQL TEST_DATABASE_URL",
+  "live: calls official Treasury endpoints",
+]

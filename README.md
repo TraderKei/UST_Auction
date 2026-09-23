@@ -1,6 +1,35 @@
 # UST Auction — 다크 대시보드
 
-현재 상태: **단계 A 기준 버전 확정 · 로컬 Git 저장 · 사용자 검토 대기**. QRA·발행통계 요구 분석(단계 B)은 아직 시작하지 않았습니다.
+## 입찰·QRA 데이터 수신 프로그램 (PostgreSQL)
+
+기존 화면과 독립적인 Python 3.12+ / PostgreSQL 16 수집기와 DB를 추가했습니다. 화면 파일은 변경하지 않습니다. 아래의 기존 UI 상태 설명은 화면 기준이며, 새 데이터 수신 프로그램은 아직 화면에 바인딩하지 않습니다.
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-test.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps -e .
+Copy-Item .env.example .env
+# .env의 UST_DATABASE_URL을 생성한 로컬 PostgreSQL DB로 설정
+.\.venv\Scripts\ust-data.exe init-db
+.\.venv\Scripts\ust-data.exe backfill-auctions --from 2026-08-01 --to 2026-08-31
+.\.venv\Scripts\ust-data.exe crawl-qra --latest
+.\.venv\Scripts\ust-data.exe validate
+```
+
+산출물: [소스](src/ust_pipeline), [잠긴 의존성](requirements.lock), [환경 예시](.env.example), [DDL](db/ust_pipeline_schema.sql), [마이그레이션](db/migrations), [한글 DB 명세](docs/DB_SPEC.md), [화면 데이터 계약·매핑](docs/DATA_REQUIREMENTS_AND_MAPPING.md), [실제 API 필드 메타](docs/API_FIELD_METADATA.md), [설치·운영·복구](docs/RUNBOOK.md), [테스트 결과](docs/TEST_RESULTS.md), [데이터 갭](docs/DATA_GAPS.md), [자동 테스트](tests_pipeline).
+
+현재 데이터 파이프라인 상태는 `docs/IMPLEMENTATION_STATE.md`와 `docs/TEST_RESULTS.md`를 기준으로 확인합니다. 기존 화면은 파이프라인과 아직 연결하지 않았습니다.
+
+## 데모 DB와 Excel 산출
+
+잠긴 offline fixture를 운영 DB와 분리된 PostgreSQL 16 데모 DB에 적재하고, 27개 테이블과 8개 view의 실제 결과를 Excel로 내보낼 수 있습니다. 안전 경계와 sheet 설명은 [데모 데이터 가이드](docs/DEMO_DATA_GUIDE.md)를 확인하세요.
+
+```powershell
+$env:UST_DEMO_DATABASE_URL='postgresql+psycopg://ust_app@localhost:5432/ust_pipeline_demo'
+.\.venv\Scripts\python.exe scripts\load_demo_database.py
+.\.venv\Scripts\python.exe scripts\export_demo_workbook.py `
+  --output artifacts\UST_Auction_QRA_DB_Demo.xlsx
+```
 
 현재 다크 화면과 기존 미커밋 변경을 함께 검사해 커밋 메시지 `feat: establish UST auction dashboard baseline`, 로컬 태그 `ui-baseline-v1`로 보존했습니다. 원격 저장소에는 push하지 않았습니다. 직접 확인·복원 절차는 `RUNBOOK.md`, 검사 기록은 `TEST_LOG.md`, 요구사항은 `REQUIREMENTS.md`에 있습니다. `ARCHITECTURE.md`와 `DATA_DICTIONARY.md`는 향후 단계용 관리 문서이며 최종 기술이나 DB 설계를 확정한 문서가 아닙니다.
 
@@ -13,7 +42,7 @@
 - 화면의 응찰률은 백분율만 표시합니다. 예: API의 원본 배수 2.48 → 화면의 248.0%. 배수와 백분율을 별도 지표로 중복 표시하지 않습니다.
 - TreasuryDirect에 요청하는 기존 코드와 대체 표본은 유지했습니다. 요청이 실패하거나 결과가 없으면 `표본 자료`를 표시합니다. 이 표본은 실시간·최신·정확성이 검증된 자료라는 뜻이 아닙니다. 예정 일정도 표본 기준 시각 이후의 목록일 뿐 현재 이후 실제 계획이 아닐 수 있습니다.
 - Allotted at High, When-Issued, Tail, Market Context는 현재 연결되지 않았으므로 N/A입니다. 목업의 예시 숫자를 실제 시세처럼 표시하지 않습니다.
-- `API 필드` / `데이터 구조`는 기존 참고 설계입니다. 실제 API 검증이나 DB 구현 완료를 뜻하지 않습니다.
+- 화면에 포함된 `API 필드` / `데이터 구조` 문구는 기존 참고 설계입니다. 검증된 파이프라인 계약은 `docs/API_FIELD_METADATA.md`, `docs/DB_SPEC.md`를 따릅니다.
 - CUSIP는 화면에서 제거했으며 내부 식별 데이터는 보존했습니다. Price는 상단 KPI에서 제거하고 하단 결과표의 `낙찰가격`은 유지했습니다.
 - 기본 시각은 한국 KST입니다. 상단 버튼으로 미국 동부 ET로 바꿀 수 있습니다. 모든 날짜는 YYYY-MM-DD이며, 시각이 없는 날짜는 임의 변환하지 않고 `원문 ET`를 표시합니다. 새로고침하면 기본 KST로 돌아갑니다.
 
@@ -72,4 +101,4 @@ pnpm lint
 - `lint`: 코드 작성 규칙 검사
 - 전체 TypeScript 형식 검사에는 기존 Cloudflare/DB 형식 선언 오류 3개가 남아 있습니다. 자세한 내용은 `TEST_LOG.md`에 기록했습니다.
 
-상세 진행 상태는 `PROJECT_STATUS.md`, 단계별 테스트 결과는 `TEST_LOG.md`를 확인하세요. 기준 저장 전에 빌드·브라우저 조작까지 재검사했습니다. QRA·발행통계 화면, 실제 API 조사·수집기·DB 생성·외부 배포는 진행하지 않았습니다.
+기존 화면 작업 기록은 `PROJECT_STATUS.md`와 `TEST_LOG.md`, 데이터 파이프라인의 검증 결과는 `docs/TEST_RESULTS.md`를 확인하세요. QRA 화면 바인딩과 외부 배포는 이번 범위에 포함되지 않습니다.

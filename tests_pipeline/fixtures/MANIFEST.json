@@ -1,0 +1,96 @@
+{
+  "files": {
+    "qra_index_2026q3.html": {
+      "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/most-recent-quarterly-refunding-documents",
+      "sha256": "5c69ea29f3676ee3724e37664b717a40725c4f4d33b576b4f703a4d1e374390c",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 73527,
+      "mime_type": "text/html"
+    },
+    "auction_schedule_2026q3.xml": {
+      "url": "https://home.treasury.gov/system/files/221/TentativeAuctionScheduleQ32026.xml",
+      "sha256": "c1f4049f6e94f994591f84f184a21ef3d41a61dd7ba6ce3a01dddd4edf9d2908",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 74558,
+      "mime_type": "application/xml"
+    },
+    "buyback_schedule_2026q3.xml": {
+      "url": "https://home.treasury.gov/system/files/221/Tentative-Buyback-ScheduleQ32026.xml",
+      "sha256": "8bed04c54df19606e193455a022a6342dbcb302aa3a7de1cd260e1acda8fed37",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 14234,
+      "mime_type": "application/xml"
+    },
+    "policy_statement_2026q3.html": {
+      "url": "https://home.treasury.gov/news/press-releases/sb0590",
+      "sha256": "c9ea1cae61583d8637913a5d0f91f13a2af1790bfb069fb0772272f45c5a7594",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 75586,
+      "mime_type": "text/html"
+    },
+    "auctions_page_1.json": {
+      "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/auctions_query?filter=auction_date:gte:2026-08-01,auction_date:lte:2026-08-31&page[number]=1&page[size]=2&sort=auction_date,cusip,issue_date",
+      "sha256": "8dc9a9bdd4d73aca3b72d0482c6cb1702023b671a08dc7438838626bc1bd35fe",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 18578,
+      "mime_type": "application/json"
+    },
+    "auctions_page_2.json": {
+      "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/auctions_query?filter=auction_date:gte:2026-08-01,auction_date:lte:2026-08-31&page[number]=2&page[size]=2&sort=auction_date,cusip,issue_date",
+      "sha256": "e1623c20f3eda1811f5b86587a61cd50ce9b784942bc7b1e75e47ce861bb7b7a",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 18594,
+      "mime_type": "application/json"
+    },
+    "quarterly_release_2026q3.bin": {
+      "url": "https://home.treasury.gov/system/files/221/2026-3rd-Quarter.xls",
+      "sha256": "7a5b5c0e73ff8460420410aa16ff0642f2040898286c06f7aea10a3a261a4241",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 203264,
+      "mime_type": "application/vnd.ms-excel"
+    },
+    "financing_estimates_2026q3.html": {
+      "url": "https://home.treasury.gov/news/press-releases/sb0584",
+      "sha256": "bba765b6c3c54784c0525b8af9ad1518859e73e71657942207f413b89fbe7a19",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 78790,
+      "mime_type": "text/html"
+    },
+    "treasury_presentation_2026q3.pdf": {
+      "url": "https://home.treasury.gov/system/files/221/TreasuryPresentationToTBACQ32026.pdf",
+      "sha256": "c05a7215f47bdda6167f54efe6c17e92489a002116ab72066dc67131ba77067b",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 2257670,
+      "mime_type": "application/pdf"
+    },
+    "tbac_recommended_2026q3.pdf": {
+      "url": "https://home.treasury.gov/system/files/221/TBACRecommendedFinancingTableByRefundingQuarter-08052026.pdf",
+      "sha256": "faf7cf4c3e04cec3ddaacef6ffd3cdadec3a5178d84b9f26ab8718398b600c7f",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 247561,
+      "mime_type": "application/pdf"
+    },
+    "dealer_survey_2026q2.pdf": {
+      "url": "https://home.treasury.gov/system/files/221/auction_survey_20260427.pdf",
+      "sha256": "f27013c47fd907349b2b67757d7aa2a9274e74b875fbac802e1993b586fcb00c",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 136234,
+      "mime_type": "application/pdf"
+    },
+    "survey_archive.html": {
+      "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/primary-dealer-auction-size-survey",
+      "sha256": "e7f499861dcd9acefdff31898ca5dd12e9f3d7723368621f4866e0b408c6b36c",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 79515,
+      "mime_type": "text/html"
+    },
+    "qra_archive.html": {
+      "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/quarterly-refunding-archives/",
+      "sha256": "8d1bb7472c68387f9dedd9eebfa09996eb7742a0e3465091051e4fda3f085033",
+      "captured_on_utc": "2026-09-03",
+      "byte_size": 77295,
+      "mime_type": "text/html"
+    }
+  },
+  "captured_on_utc": "2026-09-03"
+}

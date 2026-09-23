@@ -1,0 +1,46 @@
+{
+  "Auction": {
+    "root": "AuctionCalendar",
+    "root_fields": [
+      "AuctionCalendarDate",
+      "AuctionCalendarName",
+      "EndDate",
+      "StartDate"
+    ],
+    "row_fields": [
+      "AnnouncementDate",
+      "AuctionDate",
+      "FloatingRate",
+      "HolidayDate",
+      "HolidayName",
+      "ReOpeningIndicator",
+      "SecurityTermWeekYear",
+      "SecurityType",
+      "SettlementDate",
+      "TIPS"
+    ]
+  },
+  "Buyback": {
+    "root": "BuyBackCalendar",
+    "root_fields": [
+      "BuybackCalendarDate",
+      "BuybackCalendarName",
+      "EndDate",
+      "StartDate"
+    ],
+    "row_fields": [
+      "AnnouncementDate",
+      "MaturityDateRangeEnd",
+      "MaturityDateRangeStart",
+      "MaximumPurchaseAmountDollars",
+      "MinimumPurchaseAmountDollars",
+      "OperationDate",
+      "OperationEndTimeEasternUS",
+      "OperationStartTimeEasternUS",
+      "OperationType",
+      "PurchaseBucketName",
+      "SecurityType",
+      "SettlementDate"
+    ]
+  }
+}
