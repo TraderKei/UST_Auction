@@ -988,5 +988,296 @@ React keys must be passed directly to JSX without using spread:
     }, { once: true });
   })();
 </script>
+<style id="official-live-data-style">
+  .official-live-view { padding: 14px 16px 20px; display: grid; gap: 13px; }
+  .official-live-view[hidden] { display: none; }
+  .official-live-hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 18px; }
+  .official-live-hero h1 { margin: 3px 0 7px; font-size: 25px; }
+  .official-live-hero p { color: var(--muted); font-size: 11px; line-height: 1.6; }
+  .official-live-source { text-align: right; font-size: 10px; color: var(--muted); line-height: 1.7; }
+  .official-live-source a { color: #8cb4ff; }
+  .official-live-facts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+  .official-live-fact { border: 1px solid var(--line); background: #0a1a29; padding: 10px 12px; border-radius: 4px; }
+  .official-live-fact small { display: block; color: var(--muted); margin-bottom: 6px; }
+  .official-live-fact strong { font-size: 14px; }
+  .official-live-kpis { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); }
+  .official-live-kpis .kpi { min-height: 142px; }
+  .official-live-grid { display: grid; grid-template-columns: minmax(0,1.45fr) minmax(360px,.75fr); gap: 13px; }
+  .official-live-panel { min-width: 0; padding: 15px; }
+  .official-live-panel .section-heading { margin-bottom: 11px; }
+  .official-live-table button { all: unset; color: inherit; cursor: pointer; width: 100%; }
+  .official-live-table tr[data-selected="true"] { background: #173154; }
+  .official-live-table td { white-space: nowrap; }
+  .official-live-loading,.official-live-error { min-height: 260px; display: grid; place-items: center; text-align: center; color: var(--muted); line-height: 1.8; }
+  .official-live-error strong { display: block; color: #ff9c9c; font-size: 15px; margin-bottom: 8px; }
+  .source-badge.fiscal-api { border-color: #3b6042; color: #8cdc88; }
+  .source-badge.unavailable { border-color: #874a4a; color: #ff9c9c; }
+  .data-status.unavailable { color: #e4abab; background: #2b171766; }
+  @media (max-width: 1100px) {
+    .official-live-kpis { grid-template-columns: repeat(3,minmax(0,1fr)); }
+    .official-live-grid { grid-template-columns: minmax(0,1fr); }
+  }
+  @media (max-width: 700px) {
+    .official-live-view { padding: 10px; }
+    .official-live-hero { display: grid; }
+    .official-live-source { text-align: left; }
+    .official-live-facts { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .official-live-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  }
+</style>
+
+<script id="official-live-data-script">
+  (() => {
+    "use strict";
+
+    const API = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/auctions_query";
+    const DATASET = "https://fiscaldata.treasury.gov/datasets/treasury-securities-auctions-data/treasury-securities-auctions-data";
+    const FIELDS = [
+      "cusip", "security_type", "security_term", "original_security_term", "inflation_index_security", "floating_rate",
+      "announcemt_date", "auction_date", "issue_date", "maturity_date", "closing_time_comp", "offering_amt", "reopening",
+      "cash_management_bill_cmb", "high_discnt_rate", "high_investment_rate", "high_discnt_margin", "high_yield", "int_rate",
+      "price_per100", "bid_to_cover_ratio", "allocation_pctage", "total_tendered", "total_accepted", "primary_dealer_accepted",
+      "direct_bidder_accepted", "indirect_bidder_accepted"
+    ].join(",");
+    const state = { rows: [], results: [], upcoming: [], selected: 0, active: false, range: "" };
+
+    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+    })[character]);
+    const number = (value) => {
+      if (value == null || value === "" || String(value).toLowerCase() === "null") return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const yes = (value) => String(value ?? "").trim().toLowerCase() === "yes";
+    const iso = (date) => date.toISOString().slice(0, 10);
+    const addDays = (date, days) => {
+      const next = new Date(date);
+      next.setUTCDate(next.getUTCDate() + days);
+      return next;
+    };
+    const money = (value) => value == null ? "N/A" : "$" + (value / 1e9).toFixed(1) + "B";
+    const pct = (value, digits = 1) => value == null ? "N/A" : value.toFixed(digits) + "%";
+    const cover = (value) => value == null ? "N/A" : (value * 100).toFixed(1) + "%";
+    const share = (accepted, total) => accepted == null || total == null || total <= 0 ? null : accepted / total * 100;
+    const koreanTime = (date) => new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false
+    }).format(date).replace(/\. /g, "-").replace(".", "");
+
+    function normalize(row) {
+      const type = yes(row.inflation_index_security) ? "TIPS" : yes(row.floating_rate) ? "FRN" : row.security_type || "Unknown";
+      const cmb = yes(row.cash_management_bill_cmb);
+      const stop = type === "Bill" || cmb ? number(row.high_discnt_rate) : type === "FRN" ? number(row.high_discnt_margin) : number(row.high_yield);
+      const stopLabel = type === "Bill" || cmb ? "High Rate" : type === "FRN" ? "할인마진" : type === "TIPS" ? "실질금리" : "High Yield";
+      return {
+        key: [row.cusip, row.auction_date, row.issue_date].join("-"),
+        auctionDate: row.auction_date || "", announcementDate: row.announcemt_date || "", issueDate: row.issue_date || "",
+        maturityDate: row.maturity_date || "", closingTime: row.closing_time_comp || "", type,
+        term: row.original_security_term || row.security_term || "", reopening: yes(row.reopening), cmb,
+        offering: number(row.offering_amt), bidToCover: number(row.bid_to_cover_ratio), allotted: number(row.allocation_pctage),
+        stop, stopLabel, coupon: number(row.int_rate), price: number(row.price_per100), total: number(row.total_accepted),
+        dealer: number(row.primary_dealer_accepted), direct: number(row.direct_bidder_accepted), indirect: number(row.indirect_bidder_accepted)
+      };
+    }
+
+    function securityName(row) {
+      if (!row) return "결과 없음";
+      const term = row.term.replace(/-Year/i, "년").replace(/-Week/i, "주");
+      const type = row.type === "Bill" ? "단기채" : row.type === "Note" ? "중기채" : row.type === "Bond" ? "장기채" : row.type === "TIPS" ? "물가연동채" : row.type === "FRN" ? "변동금리채" : row.type;
+      return term + " " + type;
+    }
+
+    async function fetchOfficialRows(from, to) {
+      const rows = [];
+      let pages = 1;
+      let expected = 0;
+      for (let page = 1; page <= pages; page += 1) {
+        const url = new URL(API);
+        url.searchParams.set("fields", FIELDS);
+        url.searchParams.set("filter", `auction_date:gte:${from},auction_date:lte:${to}`);
+        url.searchParams.set("sort", "-auction_date,cusip,issue_date");
+        url.searchParams.set("format", "json");
+        url.searchParams.set("page[number]", String(page));
+        url.searchParams.set("page[size]", "1000");
+        const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+        if (!response.ok) throw new Error(`Fiscal Data API HTTP ${response.status} (page ${page})`);
+        const payload = await response.json();
+        rows.push(...(payload.data || []));
+        if (page === 1) {
+          pages = Number(payload.meta?.["total-pages"] || 1);
+          expected = Number(payload.meta?.["total-count"] || rows.length);
+          if (!Number.isInteger(pages) || pages < 1 || !Number.isInteger(expected) || expected < 0) throw new Error("잘못된 pagination metadata");
+        }
+      }
+      if (rows.length !== expected) throw new Error(`페이지 누락: ${rows.length}/${expected}`);
+      return rows;
+    }
+
+    function ensureView() {
+      let view = document.getElementById("official-live-view");
+      if (view) return view;
+      view = document.createElement("section");
+      view.id = "official-live-view";
+      view.className = "official-live-view";
+      view.setAttribute("aria-label", "미국 재무부 공식 입찰 실데이터");
+      view.innerHTML = '<section class="panel official-live-loading"><div><strong>Fiscal Data 공식 API 수신 중</strong><br>표본값을 표시하지 않고 실제 응답을 기다리고 있습니다.</div></section>';
+      const shell = document.querySelector(".terminal-shell");
+      const footer = shell?.querySelector(":scope > footer");
+      shell?.insertBefore(view, footer || null);
+      return view;
+    }
+
+    function baseNodes() {
+      const shell = document.querySelector(".terminal-shell");
+      return shell ? Array.from(shell.children).filter((node) => !node.matches(".topbar,.data-status,footer,#official-live-view,#qra-integrated-view")) : [];
+    }
+
+    function setStatus(kind, message) {
+      const badge = document.querySelector(".source-badge");
+      const status = document.querySelector(".data-status");
+      if (badge) {
+        badge.className = "source-badge " + kind;
+        badge.textContent = kind === "fiscal-api" ? "공식 API 수신" : kind === "unavailable" ? "수신 실패" : "공식 API 수신 중";
+      }
+      if (status) {
+        status.className = "data-status " + kind;
+        status.textContent = message;
+      }
+    }
+
+    function activateLive(scrollTarget) {
+      state.active = true;
+      const view = ensureView();
+      baseNodes().forEach((node) => { node.hidden = true; node.setAttribute("aria-hidden", "true"); });
+      const qra = document.getElementById("qra-integrated-view");
+      if (qra) qra.hidden = true;
+      view.hidden = false;
+      document.querySelectorAll(".nav button").forEach((button) => {
+        const selected = button.classList.contains("official-live-tab");
+        button.classList.toggle("active", selected);
+        button.setAttribute("aria-pressed", String(selected));
+      });
+      if (scrollTarget) document.getElementById(scrollTarget)?.scrollIntoView({ block: "start" });
+    }
+
+    function deactivateLive() {
+      if (!state.active) return;
+      state.active = false;
+      const view = document.getElementById("official-live-view");
+      if (view) view.hidden = true;
+      baseNodes().forEach((node) => { node.hidden = false; node.removeAttribute("aria-hidden"); });
+    }
+
+    function installNavigation() {
+      const nav = document.querySelector(".nav");
+      if (!nav) return;
+      let tab = nav.querySelector(".official-live-tab");
+      if (!tab) {
+        tab = document.createElement("button");
+        tab.type = "button";
+        tab.className = "official-live-tab active";
+        tab.textContent = "공식 실데이터";
+        tab.setAttribute("aria-pressed", "true");
+        nav.insertBefore(tab, nav.firstChild);
+        tab.addEventListener("click", (event) => { event.stopImmediatePropagation(); activateLive(); }, true);
+      }
+      nav.querySelectorAll("button:not(.official-live-tab)").forEach((button) => {
+        if (button.dataset.officialLiveBound === "true") return;
+        button.dataset.officialLiveBound = "true";
+        const label = button.textContent.trim();
+        button.addEventListener("click", (event) => {
+          if (label === "입찰 결과" || label === "입찰 일정") {
+            event.preventDefault(); event.stopImmediatePropagation(); activateLive(label === "입찰 일정" ? "official-upcoming" : "official-results");
+          } else {
+            deactivateLive();
+          }
+        }, true);
+      });
+      const brand = document.querySelector(".brand");
+      if (brand && brand.dataset.officialLiveBound !== "true") {
+        brand.dataset.officialLiveBound = "true";
+        brand.addEventListener("click", (event) => { event.preventDefault(); event.stopImmediatePropagation(); activateLive(); }, true);
+      }
+    }
+
+    function kpi(label, value, note, accent = false) {
+      return `<article class="kpi"><h3>${escapeHtml(label)}</h3><strong class="kpi-value${accent ? " green-text" : ""}">${escapeHtml(value)}</strong><div class="kpi-bottom"><div><small>${escapeHtml(note)}</small></div></div></article>`;
+    }
+
+    function render() {
+      const view = ensureView();
+      const row = state.results[state.selected];
+      const indirect = share(row?.indirect, row?.total);
+      const direct = share(row?.direct, row?.total);
+      const dealer = share(row?.dealer, row?.total);
+      const results = state.results.slice(0, 40).map((item, index) => `<tr data-selected="${index === state.selected}">
+        <td><button type="button" data-result-index="${index}">${escapeHtml(item.auctionDate)}</button></td>
+        <td>${escapeHtml(securityName(item))}${item.reopening ? ' <span class="reopen-badge">재발행</span>' : ""}</td>
+        <td>${escapeHtml(money(item.offering))}</td><td>${escapeHtml(pct(item.stop, 3))}</td><td>${escapeHtml(cover(item.bidToCover))}</td>
+        <td>${escapeHtml(pct(item.allotted))}</td><td>${escapeHtml(pct(share(item.indirect,item.total)))}</td><td>${escapeHtml(pct(share(item.direct,item.total)))}</td>
+        <td>${escapeHtml(pct(share(item.dealer,item.total)))}</td><td>${escapeHtml(item.price == null ? "N/A" : item.price.toFixed(4))}</td></tr>`).join("");
+      const upcoming = state.upcoming.slice(0, 30).map((item) => `<tr><td>${escapeHtml(item.auctionDate)}</td><td>${escapeHtml(item.closingTime || "N/A")} · 원문 ET</td>
+        <td>${escapeHtml(securityName(item))}${item.reopening ? ' <span class="reopen-badge">재발행</span>' : ""}</td><td>${escapeHtml(money(item.offering))}</td>
+        <td>${escapeHtml(item.issueDate || "N/A")}</td><td>${escapeHtml(item.announcementDate || "N/A")}</td></tr>`).join("");
+      view.innerHTML = `<section class="panel official-live-hero"><div><small class="green-text">OFFICIAL LIVE DATA</small><h1>${escapeHtml(securityName(row))}</h1>
+        <p>표의 입찰일을 선택하면 KPI가 해당 공식 레코드로 바뀝니다. 날짜는 원문 DATE이며 경쟁마감 시각은 원문 ET입니다.</p></div>
+        <div class="official-live-source"><a href="${DATASET}" target="_blank" rel="noreferrer">U.S. Treasury Fiscal Data</a><br>조회 범위 ${escapeHtml(state.range)}<br>수신 ${escapeHtml(koreanTime(new Date()))} KST</div></section>
+        <section class="official-live-facts" aria-label="선택 입찰 기본 정보">
+          <div class="official-live-fact"><small>입찰일</small><strong>${escapeHtml(row?.auctionDate || "N/A")}</strong></div>
+          <div class="official-live-fact"><small>경쟁마감</small><strong>${escapeHtml(row?.closingTime || "N/A")} · ET</strong></div>
+          <div class="official-live-fact"><small>발행금액</small><strong>${escapeHtml(money(row?.offering))}</strong></div>
+          <div class="official-live-fact"><small>결제일</small><strong>${escapeHtml(row?.issueDate || "N/A")}</strong></div>
+        </section>
+        <section class="panel official-live-kpis" aria-label="선택 입찰 주요 결과">
+          ${kpi("응찰률 (%)", cover(row?.bidToCover), "원본 배수 × 100", true)}
+          ${kpi((row?.stopLabel || "Stop") + " (Stop)", pct(row?.stop, 3), "상품별 공식 Stop")}
+          ${kpi("간접낙찰률", pct(indirect), "전체 낙찰액 기준", true)}
+          ${kpi("직접낙찰률", pct(direct), "전체 낙찰액 기준", true)}
+          ${kpi("PD낙찰률", pct(dealer), "전체 낙찰액 기준", true)}
+          ${kpi("Allotted at High", pct(row?.allotted), row?.allotted == null ? "원천 자료 없음" : "allocation_pctage")}
+        </section>
+        <div class="official-live-grid">
+          <section class="panel official-live-panel" id="official-results"><div class="section-heading"><h2 class="panel-heading">최근 공식 입찰 결과</h2><span>${state.results.length}건 수신 · 최근 40건 표시</span></div>
+            <div class="table-wrap official-live-table" tabindex="0" role="region" aria-label="최근 공식 입찰 결과표"><table><thead><tr><th>입찰일</th><th>만기 / 종류</th><th>발행금액</th><th>Stop (%)</th><th>응찰률 (%)</th><th>배정률 (%)</th><th>간접 (%)</th><th>직접 (%)</th><th>PD (%)</th><th>가격</th></tr></thead><tbody>${results}</tbody></table></div></section>
+          <section class="panel official-live-panel" id="official-upcoming"><div class="section-heading"><h2 class="panel-heading">공식 예정 일정</h2><span>${state.upcoming.length}건</span></div>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="공식 예정 입찰 일정표"><table><thead><tr><th>입찰일</th><th>마감</th><th>만기 / 종류</th><th>금액</th><th>결제일</th><th>공고일</th></tr></thead><tbody>${upcoming || '<tr><td colspan="6" class="empty-state">현재 수신된 예정 일정이 없습니다.</td></tr>'}</tbody></table></div></section>
+        </div>`;
+      view.querySelectorAll("[data-result-index]").forEach((button) => button.addEventListener("click", () => {
+        state.selected = Number(button.dataset.resultIndex); render();
+      }));
+    }
+
+    function renderError(error) {
+      const view = ensureView();
+      view.innerHTML = `<section class="panel official-live-error"><div><strong>공식 API 수신 실패</strong>표본값으로 대체하지 않았습니다.<br>${escapeHtml(error?.message || error)}<br><a href="${DATASET}" target="_blank" rel="noreferrer">Fiscal Data 원천 확인</a></div></section>`;
+      setStatus("unavailable", "공식 Fiscal Data API 수신에 실패했습니다. 저장된 표본으로 대체하지 않습니다.");
+    }
+
+    async function init() {
+      ensureView(); installNavigation(); activateLive();
+      setStatus("loading", "미국 재무부 Fiscal Data 공식 API에서 최신 입찰 자료를 수신하고 있습니다.");
+      const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+      const from = iso(addDays(today, -730));
+      const to = iso(addDays(today, 90));
+      state.range = from + "~" + to;
+      try {
+        state.rows = (await fetchOfficialRows(from, to)).map(normalize).filter((row) => row.key && row.auctionDate);
+        const todayText = iso(today);
+        state.results = state.rows.filter((row) => row.bidToCover != null).sort((a,b) => b.auctionDate.localeCompare(a.auctionDate) || a.key.localeCompare(b.key));
+        state.upcoming = state.rows.filter((row) => row.auctionDate >= todayText && row.bidToCover == null).sort((a,b) => a.auctionDate.localeCompare(b.auctionDate) || a.key.localeCompare(b.key));
+        if (!state.results.length) throw new Error("유효한 입찰 결과가 없습니다.");
+        render();
+        setStatus("fiscal-api", `미국 재무부 Fiscal Data 공식 API 자료입니다. 조회 범위 ${state.range}, 결과 ${state.results.length}건, 예정 ${state.upcoming.length}건.`);
+      } catch (error) {
+        renderError(error);
+      }
+      new MutationObserver(installNavigation).observe(document.querySelector(".nav"), { childList: true });
+    }
+
+    const start = () => requestAnimationFrame(() => requestAnimationFrame(init));
+    if (document.readyState === "complete") start();
+    else window.addEventListener("load", start, { once: true });
+  })();
+</script>
 </body>
 </html>

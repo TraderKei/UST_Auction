@@ -19,6 +19,7 @@
 | 12 | COMPLETE | 최신 `DB_SPEC.md`, `RUNBOOK.md`, mapping/gaps, `TEST_RESULTS.md`, README 링크, 최종 감사 로그 | 2026-09-07 unit 66 passed; PG 16 integration 7 passed; offline 73 passed/2 live deselected; live 2 passed | 없음 |
 | 13 | COMPLETE | 안전한 demo loader, 27-table/8-view Excel, lineage/coverage/validation, `DEMO_DATA_GUIDE.md` | 2026-09-07 unit 2 passed; PG integration 5 passed; offline 80 passed/2 live deselected; Excel 41 sheets 재오픈 PASS | 공식 fixture에 없는 CMB·Note/Bond·TIPS·FRN Stop과 동일 CUSIP 두 번째 사건은 생성하지 않고 gap 기록 |
 | 14 | COMPLETE | 실데이터 DB 적재, UI Fiscal Data 전환, 표본 fallback 제거, Allotted at High 연결, `ACTUAL_DATA_AVAILABILITY.md` | 2026-09-23 입찰 763건/재실행 763 unchanged, QRA 17문서 unchanged, DB validate 17/17 PASS, UI live 결과 882·예정 6 | WI/Tail/실시간 시장금리와 source-null 항목은 명시적 gap 유지 |
+| 15 | COMPLETE | `UST_AUCTION_ui-baseline-v2.html` standalone 공식 API 뷰, 전체 pagination, 결과 선택 KPI, 예정 일정, 실패 시 fail-closed | 2026-09-28 JS syntax/CORS 검증, build 및 30 tests PASS, lint PASS | 자동 브라우저는 file URL 정책상 시각 캡처 불가; 직접 실행용 CORS는 확인 |
 
 ## 산출물 신뢰 구분
 

@@ -33,8 +33,11 @@
 - Bill/CMB, Note/Bond/TIPS, FRN별 Stop 필드를 구분한다.
 - `allocation_pctage`를 Allotted at High KPI와 결과표에 연결했다.
 - 화면에는 공식 원천, 조회 범위, 수신 시각을 표시한다.
+- `UST_AUCTION_ui-baseline-v2.html`도 standalone 공식 실데이터 뷰를 기본으로 열고 동일한 Fiscal Data 필드와 pagination 계약을 사용한다.
 
 현재 화면은 공식 API를 직접 조회하고, PostgreSQL은 전체 lineage·revision·QRA fact의 영속 저장 및 검증에 사용한다. 화면 API가 실패해도 DB 데이터를 자동으로 섞거나 오래된 값을 최신값으로 표시하지 않는다.
+
+Standalone HTML의 `file://` 실행을 위해 2026-09-28 `Origin: null` 요청을 검증했으며, Fiscal Data API는 HTTP 200과 `Access-Control-Allow-Origin: *`를 반환했다.
 
 ## 확보하지 못한 데이터
 
