@@ -65,4 +65,17 @@ $env:RUN_LIVE_SMOKE='1'
 
 ## 남은 데이터 갭
 
-When-Issued와 Tail은 `UNAVAILABLE_SOURCE`, 2Y/10Y/30Y 실시간 시장금리는 `NOT_CONNECTED`다. Dealer 현재 입찰액·변화율·증액 개시일은 공식 field-level 근거가 없으면 NULL이다. QRA XML 미제공 발행액과 일일 TGA 연속 경로도 추정 생성하지 않는다. 상세 상태와 근거는 `DATA_GAPS.md`를 따른다.
+When-Issued와 Tail은 `UNAVAILABLE_SOURCE`, 2Y/10Y/30Y 실시간 시장금리는 `REQUIRES_PAID_SOURCE`다. Dealer 현재 입찰액·변화율·증액 개시일은 공식 field-level 근거가 없으면 NULL이다. QRA XML 미제공 발행액과 일일 TGA 연속 경로도 추정 생성하지 않는다. 상세 상태와 근거는 `DATA_GAPS.md`를 따른다.
+
+## 2026-09-23 실제 데이터·화면 연결 검증
+
+- Fiscal Data DB 적재: 2025-01-01~2026-11-07 요청, 763건 INSERT, 실제 사건 범위 2025-01-02~2026-09-24.
+- 동일 범위 재실행: 763건 UNCHANGED, INSERT/UPDATE/REJECT 0.
+- 최신 QRA: 현재 문서 17개, PARSED 11개, REVIEW_REQUIRED/QUARANTINED 6개. 재실행 시 17개 UNCHANGED 및 가능한 원천 HTTP 304.
+- 구조화 fact: borrowing 3, auction size 102, supply 14, financing mix 2, TGA anchor 4, tentative auction 213, buyback 18, dealer survey value 450.
+- `ust-data validate`: 입찰·QRA 17개 무결성 검사 전부 0건.
+- UI 공식 API live: 범위 2024-09-23~2026-12-22, 결과 882건, 예정 6건, 최신 결과 2026-09-22, 다음 수신 일정 2026-09-23.
+- UI는 하드코딩 fallback을 제거하고 `allocation_pctage`를 Allotted at High에 연결했다. API 실패는 빈 상태로 표시한다.
+- 2026-09-28 최종 코드 검증: `pnpm test` build 포함 27 passed, `pnpm lint` PASS.
+
+이 컴퓨터의 조직 TLS 중간 인증서는 Node 실행에 `$env:NODE_USE_SYSTEM_CA='1'`이 필요했다. TLS 검증을 끄지 않았으며 Python 수집기는 OS truststore로 검증했다. 상세 가용성과 gap은 `ACTUAL_DATA_AVAILABILITY.md`에 기록했다.

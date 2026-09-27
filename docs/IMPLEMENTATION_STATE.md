@@ -1,6 +1,6 @@
 # UST Auction/QRA 구현 상태
 
-감사 기준일: 2026-09-07 KST. 이 문서는 파일 존재가 아니라 현재 산출물, 재실행 결과, 보존된 공식 원천/통합검증 로그를 함께 기준으로 한다.
+감사 기준일: 2026-09-23 KST. 이 문서는 파일 존재가 아니라 현재 산출물, 재실행 결과, 보존된 공식 원천/통합검증 로그를 함께 기준으로 한다.
 
 | Phase | 상태 | 완료 산출물 | 마지막 검증 | 남은 일/차단 원인 |
 | ----- | ---- | ----------- | ----------- | ----------------- |
@@ -18,6 +18,7 @@
 | 11 | COMPLETE | CLI/pipeline 실행 관리, 범위별 validation, 실패 감사, `tests_pipeline/test_cli.py`, pipeline 회귀 | 2026-09-07 unit 44 passed/1 PG skip; PG 16 phase 42 passed; offline 73 passed/1 live deselected; Alembic first/no-op | 없음 |
 | 12 | COMPLETE | 최신 `DB_SPEC.md`, `RUNBOOK.md`, mapping/gaps, `TEST_RESULTS.md`, README 링크, 최종 감사 로그 | 2026-09-07 unit 66 passed; PG 16 integration 7 passed; offline 73 passed/2 live deselected; live 2 passed | 없음 |
 | 13 | COMPLETE | 안전한 demo loader, 27-table/8-view Excel, lineage/coverage/validation, `DEMO_DATA_GUIDE.md` | 2026-09-07 unit 2 passed; PG integration 5 passed; offline 80 passed/2 live deselected; Excel 41 sheets 재오픈 PASS | 공식 fixture에 없는 CMB·Note/Bond·TIPS·FRN Stop과 동일 CUSIP 두 번째 사건은 생성하지 않고 gap 기록 |
+| 14 | COMPLETE | 실데이터 DB 적재, UI Fiscal Data 전환, 표본 fallback 제거, Allotted at High 연결, `ACTUAL_DATA_AVAILABILITY.md` | 2026-09-23 입찰 763건/재실행 763 unchanged, QRA 17문서 unchanged, DB validate 17/17 PASS, UI live 결과 882·예정 6 | WI/Tail/실시간 시장금리와 source-null 항목은 명시적 gap 유지 |
 
 ## 산출물 신뢰 구분
 
@@ -56,7 +57,7 @@ $env:RUN_LIVE_SMOKE='1'
 .\.venv\Scripts\python.exe -m pytest -q -s -p no:cacheprovider -m live tests_pipeline/test_live.py
 ```
 
-- WI와 Tail은 `UNAVAILABLE_SOURCE`, 2Y/10Y/30Y 실시간 시장금리는 `NOT_CONNECTED`다. Stop으로 대체하지 않는다.
+- WI와 Tail은 `UNAVAILABLE_SOURCE`, 2Y/10Y/30Y 실시간 시장금리는 `REQUIRES_PAID_SOURCE`다. 공개 일별 금리를 실시간 값으로 또는 Stop을 WI로 대체하지 않는다.
 - dealer 현재액·변화율·증액 개시일은 공식 근거가 없으면 NULL이다. QRA XML의 미제공 발행액과 일일 TGA 연속경로도 만들지 않는다.
 - 현재 로컬 실행환경: `.venv` Python 3.12.14, 보존된 PostgreSQL 16.15 binary/cluster 존재. PHASE 12 검증 포트는 `127.0.0.1:55434`이며 종료 시 서버를 정지한다.
 - PHASE 10 UI 시작 SHA-256: `D5A19347BAF26EA48FFF6E159E7B0992FEA67481FBD146804F9FF2B62E5F1B4E`

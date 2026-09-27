@@ -7,7 +7,16 @@ import { auctionDateTime, dateOnly, displayInstant, scheduleRows, zoneLabel, typ
 import { AllocationChart, AuctionLineChart } from "./AuctionCharts";
 import AuctionReference from "./AuctionReference";
 
-type Props = { upcoming: TreasuryAuction[]; results: TreasuryAuction[]; source: "live" | "snapshot"; updatedAt: string; initialZone?: DisplayZone };
+type Props = {
+  upcoming: TreasuryAuction[];
+  results: TreasuryAuction[];
+  source: "fiscal-api" | "unavailable";
+  updatedAt: string;
+  sourceUrl?: string;
+  sourceRange?: string;
+  sourceError?: string;
+  initialZone?: DisplayZone;
+};
 type View = "market" | "api" | "database";
 type Tab = "calendar" | "results";
 const rowKey = (row: TreasuryAuction) => `${row.cusip}-${row.auctionDate}`;
@@ -23,7 +32,7 @@ function CalendarDate({ value }: { value: string | undefined }) {
   return <span className="date-cell"><span>{dateOnly(value)}</span><small>원문 ET · 시각 없음</small></span>;
 }
 
-export default function AuctionDashboard({ upcoming, results, source, updatedAt, initialZone = "KST" }: Props) {
+export default function AuctionDashboard({ upcoming, results, source, updatedAt, sourceUrl, sourceRange, sourceError, initialZone = "KST" }: Props) {
   const [view, setView] = useState<View>("market");
   const [tab, setTab] = useState<Tab>("results");
   const [zone, setZone] = useState<DisplayZone>(initialZone);
@@ -69,11 +78,13 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
       <div className="top-right"><div className="zone-switch" role="group" aria-label="날짜·시간 기준 선택">
         <button aria-pressed={zone === "KST"} className={zone === "KST" ? "selected" : ""} onClick={() => setZone("KST")}>한국 (KST)</button>
         <button aria-pressed={zone === "ET"} className={zone === "ET" ? "selected" : ""} onClick={() => setZone("ET")}>미국 동부 (ET)</button>
-      </div><span className={`source-badge ${source}`}>{source === "live" ? "API 수신" : "표본 자료"}</span></div>
+      </div><span className={`source-badge ${source}`}>{source === "fiscal-api" ? "공식 API 수신" : "수신 실패"}</span></div>
     </header>
     <div className="time-strip" aria-live="polite"><span>표시 기준: <b>{zoneLabel(zone)}</b> · 날짜 형식 YYYY-MM-DD</span><span>자료 기준: <b>{stamp.full}</b></span></div>
     <div className={`data-status ${source}`} role="status">
-      {source === "snapshot" ? "저장된 표본입니다. 최신 결과·현재 이후 일정을 확인한 자료가 아니며, 예정 일정도 표본 저장 시점 기준입니다." : "기존 TreasuryDirect API 수신 자료입니다. 이후 일정은 자료 기준 시각 이후의 수신 목록입니다."}
+      {source === "fiscal-api"
+        ? `미국 재무부 Fiscal Data 공식 API 자료입니다. 조회 범위: ${sourceRange ?? "확인 불가"}.`
+        : `공식 API 수신에 실패했습니다. 표본값으로 대체하지 않습니다.${sourceError ? ` 원인: ${sourceError}` : ""}`}
       <span>N/A = 자료 없음 · 시각 없는 날짜는 원문 ET 유지</span>
     </div>
 
@@ -97,11 +108,11 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
         </section>
         <section className="panel quick">
           <h2 className="panel-heading">일정 한눈에 보기</h2>
-          <div className="quick-item"><i className="quick-icon green" aria-hidden="true" /><div><small>{source === "snapshot" ? "표본 기준 예정 입찰" : "다음 예정 입찰"}</small><b>{securityName(planned[0])}</b></div></div>
+          <div className="quick-item"><i className="quick-icon green" aria-hidden="true" /><div><small>다음 예정 입찰</small><b>{securityName(planned[0])}</b></div></div>
           {planned[0] && <p className="quick-date">{auctionDateTime(planned[0], zone).full}</p>}
-          <div className="quick-item"><i className="quick-icon pink" aria-hidden="true" /><div><small>{source === "snapshot" ? "표본 기준 단기채 일정" : "다음 단기채 입찰"}</small><b>{nextBill ? securityName(nextBill) : "자료 없음"}</b></div></div>
+          <div className="quick-item"><i className="quick-icon pink" aria-hidden="true" /><div><small>다음 단기채 입찰</small><b>{nextBill ? securityName(nextBill) : "자료 없음"}</b></div></div>
           {nextBill && <p className="quick-date">{auctionDateTime(nextBill, zone).full}</p>}
-          <div className="quick-item"><small>표시 예정 물량 합계</small><b>{money(planned.reduce((sum, row) => sum + row.offeringAmount, 0))}</b></div>
+          <div className="quick-item"><small>표시 예정 물량 합계</small><b>{money(planned.reduce((sum, row) => sum + (row.offeringAmount ?? 0), 0))}</b></div>
           <div className="quick-item"><small>수신 결과</small><b>{results.length}건</b></div>
           <button className="calendar-btn" onClick={() => changeTab("calendar")}>예정 일정 보기 <span aria-hidden="true">→</span></button>
         </section>
@@ -117,7 +128,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
               const difference = percentagePointChange(mix?.[index], previousMix?.[index]);
               return <article className="kpi bidder-kpi" key={label}><h3>{label}</h3><strong className="kpi-value green-text">{percent(mix?.[index])}</strong><div className="kpi-bottom"><div><small>직전 입찰 대비</small><b className={difference == null ? "subtle" : difference > 0 ? "green-text" : difference < 0 ? "red-text" : ""}>{signedPoints(difference)}</b></div></div></article>;
             })}
-            <article className="kpi"><h3>Allotted at High</h3><strong className="kpi-value unavailable">N/A</strong><div className="kpi-bottom"><div><small>최고 낙찰금리 배정률</small><b>자료 미연결</b></div></div></article>
+            <article className="kpi"><h3>Allotted at High</h3><strong className={`kpi-value ${selectedResult?.allottedAtHigh == null ? "unavailable" : ""}`}>{percent(selectedResult?.allottedAtHigh)}</strong><div className="kpi-bottom"><div><small>최고 낙찰금리 배정률</small><b>{selectedResult?.allottedAtHigh == null ? "원천 자료 없음" : "Fiscal Data 공식값"}</b></div></div></article>
           </div>
           <p className="comparison-note">낙찰률: 전체 낙찰액 대비 비중 · 증감: 동일 종류·만기의 직전 입찰 대비 %p{previous ? ` · 비교 입찰: ${auctionDateTime(previous, zone).full}` : " · 비교 자료 없음"}</p>
         </section>
@@ -142,15 +153,15 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
                   return <tr key={rowKey(row)} className={selected ? "row-selected" : ""} onClick={() => select(row, "results")}>
                     <td><button className="row-select" aria-label={`${auctionDateTime(row, zone).full} ${securityName(row)} 결과 선택`} aria-pressed={!!selected} onClick={() => select(row, "results")} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(row, "results"); } }}><AuctionDate row={row} zone={zone} /></button></td>
                     <td>{securityName(row)} {row.reopening && <span className="reopen-badge">재발행</span>}</td><td>{money(row.offeringAmount)}</td>
-                    <td title={stopName(row)}>{percent(row.stopRate, 3)}</td><td className="subscription-cell">{subscription(row.bidToCover)}</td><td className="unavailable">N/A</td>
+                    <td title={stopName(row)}>{percent(row.stopRate, 3)}</td><td className="subscription-cell">{subscription(row.bidToCover)}</td><td className={row.allottedAtHigh == null ? "unavailable" : ""}>{percent(row.allottedAtHigh)}</td>
                     <td>{percent(allocation?.[0])}</td><td>{percent(allocation?.[1])}</td><td>{percent(allocation?.[2])}</td><td>{price(row.pricePer100)}</td>
                   </tr>;
                 })}{!resultRows.length && <tr><td colSpan={10} className="empty-state">결과 없음 · 조건에 맞는 입찰 결과가 없습니다.</td></tr>}</tbody>
               </table></div><div className="table-foot"><span>{resultRows.length}건 · 선택 시 주요 결과 갱신</span><span>금액 USD · $B = 십억 달러</span></div>
             </section>
             <section className="panel schedule-panel" id="auction-calendar" ref={calendarRef}>
-              <div className="section-heading"><h2 className="panel-heading">예정 입찰 일정</h2><span>{source === "snapshot" ? "표본 기준 예정 · 최신 일정 미확인" : "자료 기준 시각 이후 예정"}</span></div>
-              <p className="schedule-note">기준 시각: {stamp.full} · {source === "snapshot" ? "이전 표본의 일정이며, 현재 이후 실제 계획은 아직 확인되지 않았습니다." : "발표되어 수신된 일정만 표시하며, 아직 공고되지 않은 계획은 포함하지 않습니다."}</p>
+              <div className="section-heading"><h2 className="panel-heading">예정 입찰 일정</h2><span>{source === "fiscal-api" ? "자료 기준 시각 이후 예정" : "공식 API 수신 실패"}</span></div>
+              <p className="schedule-note">기준 시각: {stamp.full} · {source === "fiscal-api" ? "발표되어 수신된 일정만 표시하며, 아직 공고되지 않은 계획은 포함하지 않습니다." : "표본 일정으로 대체하지 않았습니다."}</p>
               {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
               <div className="table-wrap" tabIndex={0} role="region" aria-label="예정 입찰 일정표"><table>
                 <thead><tr><th>예정 입찰일시 · 기준</th><th>만기 / 종류</th><th>발행 예정액</th><th>결제일 (원문 ET)</th><th>직전 낙찰금리</th><th>직전 응찰률 (%)</th></tr></thead>
@@ -169,6 +180,6 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
         </section>
       </section>
     </main> : <AuctionReference view={view} />}
-    <footer><span>출처: <a href="https://www.treasurydirect.gov/auctions/upcoming/" target="_blank" rel="noreferrer">미국 재무부 · TreasuryDirect</a></span><span>금액 USD · 표시 시각 {zoneLabel(zone)}</span><span>화면 검토용 · 투자 판단용 아님</span></footer>
+    <footer><span>출처: <a href={sourceUrl ?? "https://fiscaldata.treasury.gov/datasets/treasury-securities-auctions-data/treasury-securities-auctions-data"} target="_blank" rel="noreferrer">미국 재무부 · Fiscal Data</a></span><span>금액 USD · 표시 시각 {zoneLabel(zone)}</span><span>화면 검토용 · 투자 판단용 아님</span></footer>
   </div>;
 }

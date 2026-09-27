@@ -7,11 +7,12 @@ export type TreasuryAuction = {
   type: string;
   term: string;
   securityTerm: string;
-  offeringAmount: number;
+  offeringAmount: number | null;
   closingTimeCompetitive: string;
   reopening: boolean;
   cmb: boolean;
   bidToCover: number | null;
+  allottedAtHigh: number | null;
   stopRate: number | null;
   stopLabel: string;
   investmentRate: number | null;
@@ -24,18 +25,54 @@ export type TreasuryAuction = {
   indirectAccepted: number | null;
 };
 
-type RawTreasuryAuction = Record<string, string>;
+export type TreasuryData = {
+  upcoming: TreasuryAuction[];
+  results: TreasuryAuction[];
+  source: "fiscal-api" | "unavailable";
+  updatedAt: string;
+  sourceUrl: string;
+  sourceRange: string;
+  sourceError?: string;
+};
 
-const n = (value?: string) => value && Number.isFinite(Number(value)) ? Number(value) : null;
+type RawTreasuryAuction = Record<string, string | null>;
+type FiscalResponse = {
+  data?: RawTreasuryAuction[];
+  meta?: { "total-count"?: number | string; "total-pages"?: number | string };
+};
 
-function normalize(row: RawTreasuryAuction): TreasuryAuction {
-  const type = row.type || row.securityType;
-  const stop = type === "Bill" || row.cashManagementBillCMB === "Yes"
-    ? n(row.highDiscountRate)
+const FISCAL_API = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/auctions_query";
+const FIELDS = [
+  "record_date", "cusip", "security_type", "security_term", "original_security_term",
+  "inflation_index_security", "floating_rate",
+  "announcemt_date", "auction_date", "issue_date", "maturity_date", "closing_time_comp",
+  "offering_amt", "reopening", "cash_management_bill_cmb", "high_discnt_rate",
+  "high_investment_rate", "high_discnt_margin", "high_yield", "int_rate", "price_per100",
+  "bid_to_cover_ratio", "allocation_pctage", "total_tendered", "total_accepted",
+  "primary_dealer_accepted", "direct_bidder_accepted", "indirect_bidder_accepted",
+].join(",");
+
+const n = (value?: string | null) => {
+  if (value == null || value.trim() === "" || value.toLowerCase() === "null") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const yes = (value?: string | null) => value?.trim().toLowerCase() === "yes";
+
+export function normalizeFiscalAuction(row: RawTreasuryAuction): TreasuryAuction {
+  const type = yes(row.inflation_index_security)
+    ? "TIPS"
+    : yes(row.floating_rate)
+      ? "FRN"
+      : row.security_type ?? "Unknown";
+  const cmb = yes(row.cash_management_bill_cmb);
+  const stop = type === "Bill" || cmb
+    ? n(row.high_discnt_rate)
     : type === "FRN"
-      ? n(row.highDiscountMargin)
-      : n(row.highYield);
-  const stopLabel = type === "Bill" || row.cashManagementBillCMB === "Yes"
+      ? n(row.high_discnt_margin)
+      : n(row.high_yield);
+  const stopLabel = type === "Bill" || cmb
     ? "High rate"
     : type === "FRN"
       ? "Discount margin"
@@ -43,89 +80,106 @@ function normalize(row: RawTreasuryAuction): TreasuryAuction {
         ? "High real yield"
         : "High yield";
   return {
-    cusip: row.cusip,
-    auctionDate: row.auctionDate,
-    announcementDate: row.announcementDate,
-    issueDate: row.issueDate,
-    maturityDate: row.maturityDate,
+    cusip: row.cusip ?? "",
+    auctionDate: row.auction_date ?? "",
+    announcementDate: row.announcemt_date ?? "",
+    issueDate: row.issue_date ?? "",
+    maturityDate: row.maturity_date ?? "",
     type,
-    term: row.term || row.securityTerm,
-    securityTerm: row.securityTerm,
-    offeringAmount: n(row.offeringAmount) ?? 0,
-    closingTimeCompetitive: row.closingTimeCompetitive,
-    reopening: row.reopening === "Yes",
-    cmb: row.cashManagementBillCMB === "Yes",
-    bidToCover: n(row.bidToCoverRatio),
+    term: row.original_security_term || row.security_term || "",
+    securityTerm: row.security_term ?? "",
+    offeringAmount: n(row.offering_amt),
+    closingTimeCompetitive: row.closing_time_comp ?? "",
+    reopening: yes(row.reopening),
+    cmb,
+    bidToCover: n(row.bid_to_cover_ratio),
+    allottedAtHigh: n(row.allocation_pctage),
     stopRate: stop,
     stopLabel,
-    investmentRate: n(row.highInvestmentRate),
-    couponRate: n(row.interestRate),
-    pricePer100: n(row.pricePer100),
-    totalTendered: n(row.totalTendered),
-    totalAccepted: n(row.totalAccepted),
-    dealerAccepted: n(row.primaryDealerAccepted),
-    directAccepted: n(row.directBidderAccepted),
-    indirectAccepted: n(row.indirectBidderAccepted),
+    investmentRate: n(row.high_investment_rate),
+    couponRate: n(row.int_rate),
+    pricePer100: n(row.price_per100),
+    totalTendered: n(row.total_tendered),
+    totalAccepted: n(row.total_accepted),
+    dealerAccepted: n(row.primary_dealer_accepted),
+    directAccepted: n(row.direct_bidder_accepted),
+    indirectAccepted: n(row.indirect_bidder_accepted),
   };
 }
 
-const fallbackUpcoming: TreasuryAuction[] = [
-  ["912797SU2","2026-08-24","2026-08-20","2026-08-27","2026-11-27","Bill","13-Week",92e9,"11:30 AM",true],
-  ["912797WC7","2026-08-24","2026-08-20","2026-08-27","2027-02-25","Bill","26-Week",79e9,"11:30 AM",false],
-  ["912797UJ4","2026-08-25","2026-08-20","2026-08-27","2026-10-08","Bill","6-Week",95e9,"11:30 AM",true],
-  ["91282CRH6","2026-08-25","2026-08-20","2026-08-31","2028-08-31","Note","2-Year",69e9,"01:00 PM",false],
-  ["91282CRD5","2026-08-26","2026-08-20","2026-08-28","2028-07-31","FRN","2-Year",28e9,"11:30 AM",true],
-  ["91282CRK9","2026-08-26","2026-08-20","2026-08-31","2031-08-31","Note","5-Year",70e9,"01:00 PM",false],
-  ["91282CRJ2","2026-08-27","2026-08-20","2026-08-31","2033-08-31","Note","7-Year",44e9,"01:00 PM",false],
-].map(([cusip,auctionDate,announcementDate,issueDate,maturityDate,type,term,offeringAmount,closingTimeCompetitive,reopening]) => ({
-  cusip,auctionDate,announcementDate,issueDate,maturityDate,type,term,securityTerm:term,offeringAmount,closingTimeCompetitive,reopening,cmb:false,
-  bidToCover:null,stopRate:null,stopLabel:"High rate",investmentRate:null,couponRate:null,pricePer100:null,totalTendered:null,totalAccepted:null,dealerAccepted:null,directAccepted:null,indirectAccepted:null,
-} as TreasuryAuction));
-
-const resultSeed = [
-  ["912810US5","2026-08-20","TIPS","30-Year",8e9,2.82,2.973,null,2.375,91.015136,23.588952e9,9.0284534e9,.167e9,1.06813e9,6.7076114e9,true],
-  ["912797VD6","2026-08-20","Bill","4-Week",110e9,2.84,3.64,3.701,null,99.716889,319.3290709e9,117.0259859e9,32.060545e9,3.344965e9,67.110826e9,true],
-  ["912797VM6","2026-08-20","Bill","8-Week",100e9,3.06,3.655,3.727,null,99.431444,312.0270386e9,106.3874386e9,29.6976e9,2.61e9,64.572081e9,true],
-  ["912810UX4","2026-08-19","Bond","20-Year",16e9,2.53,5.204,null,5.125,99.021288,42.4761081e9,18.0569281e9,1.974395e9,3.8868579e9,9.9479391e9,false],
-  ["912797WG8","2026-08-19","Bill","17-Week",72e9,3.35,3.75,3.85,null,98.760417,245.4651552e9,76.5997096e9,23.3937e9,4.496357e9,43.2326644e9,false],
-  ["912797SA6","2026-08-18","Bill","6-Week",95e9,2.97,3.645,3.711,null,99.57475,289.3626839e9,101.9445423e9,27.3294e9,4.34352e9,60.2078384e9,true],
-  ["912797UZ8","2026-08-17","Bill","13-Week",92e9,2.86,3.715,3.802,null,99.060931,269.5519569e9,98.7258639e9,35.21688e9,6.074e9,48.1358881e9,true],
-  ["912797TV9","2026-08-17","Bill","26-Week",79e9,2.97,3.78,3.907,null,98.089,240.5495353e9,84.7753723e9,18.9740375e9,8.0723875e9,49.934964e9,true],
-  ["912810UW6","2026-08-13","Bond","30-Year",25e9,2.39,5.216,null,5.125,98.627017,66.1245288e9,31.3235338e9,2.866735e9,5.39015e9,16.647723e9,false],
-  ["91282CRD5","2026-07-29","FRN","2-Year",30e9,3.37,.050,null,null,100,104.3158454e9,33.3172268e9,11.0182e9,.0008182e9,18.9433132e9,false],
-  ["91282CRC7","2026-07-28","Note","7-Year",44e9,2.49,4.473,null,4.375,99.416549,114.269981e9,48.864691e9,5.69451e9,7.413e9,30.801964e9,false],
-  ["91282CRA1","2026-07-27","Note","5-Year",70e9,2.28,4.408,null,4.375,99.853357,167.4915709e9,77.7392809e9,9.44771e9,19.003e9,41.354505e9,false],
-  ["91282CRB9","2026-07-27","Note","2-Year",69e9,2.66,4.315,null,4.25,99.87672,191.3062317e9,76.6288421e9,6.3408432e9,23.0801672e9,38.355032e9,false],
-];
-
-const fallbackResults: TreasuryAuction[] = resultSeed.map(([cusip,auctionDate,type,term,offeringAmount,bidToCover,stopRate,investmentRate,couponRate,pricePer100,totalTendered,totalAccepted,dealerAccepted,directAccepted,indirectAccepted,reopening]) => ({
-  cusip,auctionDate,announcementDate:"",issueDate:"",maturityDate:"",type,term,securityTerm:term,offeringAmount,closingTimeCompetitive:"",reopening,cmb:false,bidToCover,stopRate,
-  stopLabel:type === "Bill" ? "High rate" : type === "FRN" ? "Discount margin" : type === "TIPS" ? "High real yield" : "High yield",investmentRate,couponRate,pricePer100,totalTendered,totalAccepted,dealerAccepted,directAccepted,indirectAccepted,
-} as TreasuryAuction));
-
-async function fetchRows(url: string) {
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(7000),
-  });
-  if (!response.ok) throw new Error(`TreasuryDirect ${response.status}`);
-  return await response.json() as RawTreasuryAuction[];
+function isoDate(value: Date) {
+  return value.toISOString().slice(0, 10);
 }
 
-export async function getTreasuryData() {
+function addUtcDays(value: Date, days: number) {
+  const copy = new Date(value);
+  copy.setUTCDate(copy.getUTCDate() + days);
+  return copy;
+}
+
+async function fetchFiscalRows(from: string, to: string) {
+  const url = new URL(FISCAL_API);
+  url.searchParams.set("fields", FIELDS);
+  url.searchParams.set("filter", `auction_date:gte:${from},auction_date:lte:${to}`);
+  url.searchParams.set("sort", "-auction_date,cusip,issue_date");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("page[size]", "1000");
+  const rows: RawTreasuryAuction[] = [];
+  let totalPages = 1;
+  let totalCount = 0;
+  for (let page = 1; page <= totalPages; page += 1) {
+    url.searchParams.set("page[number]", String(page));
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`Fiscal Data API HTTP ${response.status} on page ${page}`);
+    const payload = await response.json() as FiscalResponse;
+    rows.push(...(payload.data ?? []));
+    if (page === 1) {
+      totalPages = Number(payload.meta?.["total-pages"] ?? 1);
+      totalCount = Number(payload.meta?.["total-count"] ?? rows.length);
+      if (!Number.isInteger(totalPages) || totalPages < 1 || !Number.isInteger(totalCount) || totalCount < 0) {
+        throw new Error("Fiscal Data API returned invalid pagination metadata");
+      }
+    }
+  }
+  if (rows.length !== totalCount) {
+    throw new Error(`Fiscal Data API pagination incomplete (${rows.length}/${totalCount}, ${totalPages} pages)`);
+  }
+  return rows;
+}
+
+export async function getTreasuryData(): Promise<TreasuryData> {
+  const retrievedAt = new Date();
+  const today = new Date(retrievedAt);
+  today.setUTCHours(0, 0, 0, 0);
+  const from = isoDate(addUtcDays(today, -730));
+  const to = isoDate(addUtcDays(today, 90));
+  const sourceRange = `${from}~${to}`;
   try {
-    const [announced, auctioned] = await Promise.all([
-      fetchRows("https://www.treasurydirect.gov/TA_WS/securities/announced?format=json"),
-      fetchRows("https://www.treasurydirect.gov/TA_WS/securities/auctioned?format=json&day=45"),
-    ]);
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const upcoming = announced.map(normalize).filter((row) => new Date(row.auctionDate) >= today).sort((a,b) => a.auctionDate.localeCompare(b.auctionDate)).slice(0, 24);
-    const results = auctioned.map(normalize).filter((row) => row.bidToCover !== null).sort((a,b) => b.auctionDate.localeCompare(a.auctionDate)).slice(0, 36);
-    if (!upcoming.length || !results.length) throw new Error("No current records");
-    return { upcoming, results, source: "live" as const, updatedAt: new Date().toISOString() };
-  } catch {
-    return { upcoming: fallbackUpcoming, results: fallbackResults, source: "snapshot" as const, updatedAt: "2026-08-21T06:30:00.000Z" };
+    const rows = (await fetchFiscalRows(from, to))
+      .map(normalizeFiscalAuction)
+      .filter((row) => row.cusip && row.auctionDate);
+    const todayText = isoDate(today);
+    const upcoming = rows
+      .filter((row) => row.auctionDate >= todayText && row.bidToCover === null)
+      .sort((a, b) => a.auctionDate.localeCompare(b.auctionDate) || a.cusip.localeCompare(b.cusip));
+    const results = rows
+      .filter((row) => row.bidToCover !== null)
+      .sort((a, b) => b.auctionDate.localeCompare(a.auctionDate) || a.cusip.localeCompare(b.cusip));
+    if (!results.length) throw new Error("Fiscal Data API returned no auction results");
+    return { upcoming, results, source: "fiscal-api", updatedAt: retrievedAt.toISOString(), sourceUrl: FISCAL_API, sourceRange };
+  } catch (error) {
+    return {
+      upcoming: [],
+      results: [],
+      source: "unavailable",
+      updatedAt: retrievedAt.toISOString(),
+      sourceUrl: FISCAL_API,
+      sourceRange,
+      sourceError: error instanceof Error ? error.message : "Unknown data retrieval failure",
+    };
   }
 }

@@ -14,7 +14,7 @@ async function render() {
   );
 }
 
-test("server-renders the dark Treasury auction terminal (offline)", async (t) => {
+test("server-renders the dark Treasury auction terminal without sample fallback (offline)", async (t) => {
   t.mock.method(globalThis, "fetch", async () => { throw new Error("Offline UI test"); });
   const response = await render();
   assert.equal(response.status, 200);
@@ -27,10 +27,13 @@ test("server-renders the dark Treasury auction terminal (offline)", async (t) =>
   assert.match(html, /예정 입찰 일정/);
   assert.match(html, /시장 동향/);
   assert.match(html, /data-theme="dark"/);
-  assert.match(html, /282\.0/);
+  assert.match(html, /공식 API 수신에 실패했습니다/);
+  assert.match(html, /표본값으로 대체하지 않습니다/);
+  assert.match(html, /결과 없음/);
+  assert.doesNotMatch(html, /282\.0/);
   const visible = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, " ");
   assert.doesNotMatch(visible, /CUSIP|Bid\s*\/\s*cover|Bid-to-cover|\bBTC\b|\d+(?:\.\d+)?\s*×/i);
-  assert.match(html, /TreasuryDirect/);
+  assert.match(html, /Fiscal Data/);
   assert.doesNotMatch(html, /codex-preview|Building your site|react-loading-skeleton/i);
 });
 

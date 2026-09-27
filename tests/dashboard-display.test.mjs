@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { loadSource } from "./source-loader.mjs";
 
 const { subscriptionPercent, subscription, awardMix, priorResult, percentagePointChange, signedPoints } = loadSource("../lib/auction-display.ts");
+const { normalizeFiscalAuction } = loadSource("../lib/treasury.ts");
 const Dashboard = loadSource("../app/AuctionDashboard.tsx").default;
 const Reference = loadSource("../app/AuctionReference.tsx").default;
 const base = {
@@ -16,7 +17,7 @@ const base = {
   investmentRate: null, couponRate: 4.25, pricePer100: 99.8125, totalTendered: 104.16e9,
   totalAccepted: 42e9, dealerAccepted: 6.3e9, directAccepted: 8.4e9, indirectAccepted: 25.2e9,
 };
-const props = { upcoming: [], results: [base], source: "snapshot", updatedAt: "2026-08-21T06:30:00Z" };
+const props = { upcoming: [], results: [base], source: "unavailable", updatedAt: "2026-08-21T06:30:00Z" };
 const visibleText = html => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
 test("응찰률: 2.48 → 248.0%, 결측값은 N/A, 0은 0.0%", () => {
@@ -145,7 +146,7 @@ test("시각 없는 결과는 KST를 선택해도 원문 날짜·ET 표시 유�
 
 test("최근 결과와 향후 수신 일정이 기본 화면에 동시에 표시", () => {
   const upcoming = [{ ...base, auctionDate: "2026-08-25" }];
-  const html = renderToStaticMarkup(React.createElement(Dashboard, { ...props, source: "live", upcoming }));
+  const html = renderToStaticMarkup(React.createElement(Dashboard, { ...props, source: "fiscal-api", sourceRange: "2024-09-23~2026-12-22", upcoming }));
   assert.match(html, /aria-label="최근 입찰 결과표"/);
   assert.match(html, /aria-label="예정 입찰 일정표"/);
   assert.match(html, /2026-08-26 02:00 · 한국 KST 10년 중기채 일정 선택/);
@@ -153,10 +154,43 @@ test("최근 결과와 향후 수신 일정이 기본 화면에 동시에 표시
   assert.match(html, /아직 공고되지 않은 계획은 포함하지 않습니다/);
 });
 
-test("표본 일정은 현재 이후 실제 예정으로 오인하지 않게 구분", () => {
+test("API 실패 시 표본 일정으로 대체하지 않음", () => {
   const html = renderToStaticMarkup(React.createElement(Dashboard, { ...props, upcoming: [{ ...base, auctionDate: "2026-08-25" }] }));
-  assert.match(html, /표본 기준 예정 · 최신 일정 미확인/);
-  assert.match(html, /현재 이후 실제 계획은 아직 확인되지 않았습니다/);
+  assert.match(html, /공식 API 수신 실패/);
+  assert.match(html, /표본 일정으로 대체하지 않았습니다/);
+});
+
+test("Allotted at High 공식값을 표시하고 결측은 N/A로 유지", () => {
+  const available = renderToStaticMarkup(React.createElement(Dashboard, { ...props, results: [{ ...base, allottedAtHigh: 33.42 }] }));
+  assert.match(available, /Allotted at High[\s\S]*33\.4%[\s\S]*Fiscal Data 공식값/);
+  const missing = renderToStaticMarkup(React.createElement(Dashboard, props));
+  assert.match(missing, /Allotted at High[\s\S]*N\/A[\s\S]*원천 자료 없음/);
+});
+
+test("운영 로더에 하드코딩된 표본 입찰 데이터가 없음", async () => {
+  const source = await readFile(new URL("../lib/treasury.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /fallbackUpcoming|fallbackResults|resultSeed|912797SU2/);
+  assert.match(source, /api\.fiscaldata\.treasury\.gov/);
+});
+
+test("Fiscal Data snake_case를 상품별 Stop과 Allotted at High로 정규화", () => {
+  const tips = normalizeFiscalAuction({
+    cusip: "TEST", security_type: "Note", security_term: "9-Year 10-Month", original_security_term: "10-Year",
+    inflation_index_security: "Yes", floating_rate: "No", auction_date: "2026-09-22", offering_amt: "18000000000",
+    high_yield: "2.125", bid_to_cover_ratio: "2.48", allocation_pctage: "33.42", reopening: "Yes",
+  });
+  assert.equal(tips.type, "TIPS");
+  assert.equal(tips.term, "10-Year");
+  assert.equal(tips.stopRate, 2.125);
+  assert.equal(tips.stopLabel, "High real yield");
+  assert.equal(tips.allottedAtHigh, 33.42);
+  assert.equal(tips.offeringAmount, 18e9);
+  assert.equal(tips.reopening, true);
+
+  const frn = normalizeFiscalAuction({ security_type: "Note", floating_rate: "Yes", high_discnt_margin: "0.075" });
+  assert.equal(frn.type, "FRN");
+  assert.equal(frn.stopRate, 0.075);
+  assert.equal(frn.stopLabel, "Discount margin");
 });
 
 test("금리 종류를 구분하고 유효 평균 표본 수를 정확히 표시", () => {

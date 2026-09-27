@@ -11,7 +11,7 @@
     "start": "vinext start",
     "test": "pnpm run build && node --test tests/*.test.mjs",
     "test:ui": "node --test tests/dashboard-display.test.mjs tests/auction-time.test.mjs",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .venv --ignore-pattern work",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

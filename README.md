@@ -2,7 +2,7 @@
 
 ## 입찰·QRA 데이터 수신 프로그램 (PostgreSQL)
 
-기존 화면과 독립적인 Python 3.12+ / PostgreSQL 16 수집기와 DB를 추가했습니다. 화면 파일은 변경하지 않습니다. 아래의 기존 UI 상태 설명은 화면 기준이며, 새 데이터 수신 프로그램은 아직 화면에 바인딩하지 않습니다.
+Python 3.12+ / PostgreSQL 16 수집기와 DB는 공식 Fiscal Data·QRA 원천을 적재합니다. React 화면도 Fiscal Data Auctions API의 실제 데이터를 직접 읽으며, API 실패 시 하드코딩 표본으로 대체하지 않습니다. PostgreSQL은 전체 lineage·revision·QRA fact의 영속 저장과 검증에 사용합니다.
 
 ```powershell
 py -3.12 -m venv .venv
@@ -18,7 +18,7 @@ Copy-Item .env.example .env
 
 산출물: [소스](src/ust_pipeline), [잠긴 의존성](requirements.lock), [환경 예시](.env.example), [DDL](db/ust_pipeline_schema.sql), [마이그레이션](db/migrations), [한글 DB 명세](docs/DB_SPEC.md), [화면 데이터 계약·매핑](docs/DATA_REQUIREMENTS_AND_MAPPING.md), [실제 API 필드 메타](docs/API_FIELD_METADATA.md), [설치·운영·복구](docs/RUNBOOK.md), [테스트 결과](docs/TEST_RESULTS.md), [데이터 갭](docs/DATA_GAPS.md), [자동 테스트](tests_pipeline).
 
-현재 데이터 파이프라인 상태는 `docs/IMPLEMENTATION_STATE.md`와 `docs/TEST_RESULTS.md`를 기준으로 확인합니다. 기존 화면은 파이프라인과 아직 연결하지 않았습니다.
+현재 데이터 파이프라인 상태는 `docs/IMPLEMENTATION_STATE.md`와 `docs/TEST_RESULTS.md`, 실제 적재·미확보 항목은 `docs/ACTUAL_DATA_AVAILABILITY.md`를 기준으로 확인합니다.
 
 ## 데모 DB와 Excel 산출
 
@@ -40,8 +40,8 @@ $env:UST_DEMO_DATABASE_URL='postgresql+psycopg://ust_app@localhost:5432/ust_pipe
 - 이전 `.codex/.chatgpt-projects/.../ust-auction-dashboard.html`은 별도 파일입니다. 그 파일을 새로고침해도 현재 프로젝트의 수정은 보이지 않습니다.
 - 이 프로젝트는 **로컬 주소 `http://localhost:3000/`**에서 확인합니다. 서버가 실행 중이어야 열립니다.
 - 화면의 응찰률은 백분율만 표시합니다. 예: API의 원본 배수 2.48 → 화면의 248.0%. 배수와 백분율을 별도 지표로 중복 표시하지 않습니다.
-- TreasuryDirect에 요청하는 기존 코드와 대체 표본은 유지했습니다. 요청이 실패하거나 결과가 없으면 `표본 자료`를 표시합니다. 이 표본은 실시간·최신·정확성이 검증된 자료라는 뜻이 아닙니다. 예정 일정도 표본 기준 시각 이후의 목록일 뿐 현재 이후 실제 계획이 아닐 수 있습니다.
-- Allotted at High, When-Issued, Tail, Market Context는 현재 연결되지 않았으므로 N/A입니다. 목업의 예시 숫자를 실제 시세처럼 표시하지 않습니다.
+- 화면은 Fiscal Data Auctions API의 최근 730일과 향후 90일 범위를 조회합니다. 요청 실패·불완전 pagination·결과 0건이면 빈 상태와 원인을 표시하고 과거 표본을 보여주지 않습니다.
+- Allotted at High는 공식 `allocation_pctage`에 연결했습니다. When-Issued, Tail, 실시간 Market Context는 검증된 원천이 없어 N/A이며 Stop이나 일별 금리로 대체하지 않습니다.
 - 화면에 포함된 `API 필드` / `데이터 구조` 문구는 기존 참고 설계입니다. 검증된 파이프라인 계약은 `docs/API_FIELD_METADATA.md`, `docs/DB_SPEC.md`를 따릅니다.
 - CUSIP는 화면에서 제거했으며 내부 식별 데이터는 보존했습니다. Price는 상단 KPI에서 제거하고 하단 결과표의 `낙찰가격`은 유지했습니다.
 - 기본 시각은 한국 KST입니다. 상단 버튼으로 미국 동부 ET로 바꿀 수 있습니다. 모든 날짜는 YYYY-MM-DD이며, 시각이 없는 날짜는 임의 변환하지 않고 `원문 ET`를 표시합니다. 새로고침하면 기본 KST로 돌아갑니다.
@@ -53,6 +53,7 @@ PowerShell(명령어 입력 창)에서 아래를 실행합니다. 이미 설치�
 ```powershell
 Set-Location 'C:\Users\KOSCOM\Documents\ChatGPT\US_Treasury_Auction'
 $env:PATH = 'C:\Users\KOSCOM\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin;' + $env:PATH
+$env:NODE_USE_SYSTEM_CA = '1' # 조직 TLS 중간 인증서가 있는 현재 컴퓨터
 pnpm dev
 ```
 
@@ -82,8 +83,8 @@ git worktree add --detach '..\US_Treasury_Auction_ui-baseline-v1' ui-baseline-v1
 
 1. `http://localhost:3000/`을 새로고침합니다. `UST AUCTION`, `입찰 결과`, 짙은 남색 배경을 확인합니다.
 2. KPI 순서는 응찰률 → High Yield (Stop) → 간접낙찰률 → 직접낙찰률 → PD낙찰률 → Allotted at High입니다. 두 번째 카드 이름은 상품에 맞게 바뀝니다(물가연동채: 실질금리).
-3. `중기채` 필터 → 결과표의 `2년 중기채`를 선택합니다. 표본 기준 응찰률은 `266.0%`입니다. 같은 종류·만기의 직전 자료가 없으면 낙찰률 증감은 `비교 자료 없음`입니다.
-4. 하단에 최근 결과표와 예정 일정표가 함께 있는지 확인합니다. 표본의 2년 중기채 예정일은 한국 `2026-08-26 02:00` ↔ 미국 동부 `2026-08-25 13:00`으로 전환됩니다. 결제일은 시각 정보가 없으므로 `2026-08-31 · 원문 ET`로 유지됩니다.
+3. `중기채` 필터에서 실제 최근 결과를 선택하고 응찰률·Stop·낙찰 비중·Allotted at High가 같은 공식 레코드에서 표시되는지 확인합니다. 비교 자료가 없으면 `비교 자료 없음`입니다.
+4. 하단에 최근 결과표와 수신된 예정 일정표가 함께 있는지 확인합니다. ET 경쟁마감 시각은 DST를 반영해 KST로 전환하고, 결제일처럼 시각이 없는 날짜는 `원문 ET`로 유지합니다.
 5. 창 폭을 줄여 6개 KPI가 3열 또는 2열로, 차트가 세로로 배치되는지 확인합니다. 긴 표는 내부 스크롤로 조회합니다. 자료 기준 시각과 시간대 버튼은 작은 화면에서도 표시됩니다.
 
 ## 검사 명령
@@ -96,8 +97,8 @@ pnpm test
 pnpm lint
 ```
 
-- `test:ui`: 인터넷 요청 없이 표시·계산·서머타임·날짜 경계 등 22개 검사
-- `test`: 실행용 빌드를 새로 만든 뒤 총 24개 검사. 화면 테스트는 인터넷 요청을 차단하고 대체 표본을 사용합니다.
+- `test:ui`: 인터넷 요청 없이 표시·계산·서머타임·날짜 경계 등 25개 검사
+- `test`: 실행용 빌드와 총 27개 화면 회귀검사. 테스트 입력은 네트워크와 분리된 합성 레코드이며 운영 fallback 데이터로 사용되지 않습니다.
 - `lint`: 코드 작성 규칙 검사
 - 전체 TypeScript 형식 검사에는 기존 Cloudflare/DB 형식 선언 오류 3개가 남아 있습니다. 자세한 내용은 `TEST_LOG.md`에 기록했습니다.
 
