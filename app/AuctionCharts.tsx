@@ -12,20 +12,21 @@ function DateAxis({ row, zone, x }: { row: TreasuryAuction; zone: DisplayZone; x
   return <><text className="axis-date" x={x} y="196" textAnchor="middle">{date.date}</text><text className="axis-term" x={x} y="210" textAnchor="middle">{termName(row.term)} · {date.converted ? zone : "원문 ET"}</text></>;
 }
 
-export function AuctionLineChart({ rows, kind, onSelect, zone }: ChartProps & { kind: "stop" | "subscription" }) {
+export function AuctionLineChart({ rows, kind, onSelect, zone, subscriptionAverage, subscriptionAverageCount }: ChartProps & { kind: "stop" | "subscription"; subscriptionAverage?: number | null; subscriptionAverageCount?: number }) {
   const isSubscription = kind === "subscription";
   const points = rows.flatMap(row => {
     const value = isSubscription ? subscriptionPercent(row.bidToCover) : row.stopRate;
     return value == null || !Number.isFinite(value) ? [] : [{ row, value }];
   });
-  const values = points.map(point => point.value);
+  const average = isSubscription && subscriptionAverage != null && Number.isFinite(subscriptionAverage) ? subscriptionAverage : null;
+  const values = [...points.map(point => point.value), ...(average == null ? [] : [average])];
   const padding = Math.max(isSubscription ? 20 : 0.05, (Math.max(...values) - Math.min(...values)) * 0.2);
   const min = values.length ? (isSubscription ? Math.max(0, Math.min(...values) - padding) : Math.min(...values) - padding) : 0;
   const max = values.length ? Math.max(...values) + padding : 1;
   const y = (value: number) => 175 - (value - min) / (max - min) * 150;
   const x = (index: number) => points.length === 1 ? 190 : 50 + index / (points.length - 1) * 270;
   const coordinates = points.map((point, index) => `${x(index)},${y(point.value)}`).join(" ");
-  const label = isSubscription ? "응찰률 (%) 차트" : "낙찰 금리 (%) 차트";
+  const label = isSubscription ? `응찰률 (%) 차트${average == null ? "" : `, 최근 6개 유효 입찰 평균 ${percent(average, 1)} (${subscriptionAverageCount ?? 0}건)`}` : "낙찰 금리 (%) 차트";
   const color = isSubscription ? "#ff5268" : "#4385f5";
   return <div className="chart-box">
     {!points.length ? <div className="chart-empty">표시할 데이터 없음</div> : <svg viewBox="0 0 350 218" role="img" aria-label={label}>
@@ -36,6 +37,7 @@ export function AuctionLineChart({ rows, kind, onSelect, zone }: ChartProps & { 
         return <g key={index}><line x1="45" x2="338" y1={y(value)} y2={y(value)} className="grid-line" /><text x="39" y={y(value) + 4} textAnchor="end">{percent(value, isSubscription ? 0 : 2)}</text></g>;
       })}
       {points.length > 1 && <><polygon points={`${x(0)},175 ${coordinates} ${x(points.length - 1)},175`} fill={`url(#area-${kind})`} /><polyline points={coordinates} fill="none" stroke={color} strokeWidth="2.3" strokeLinejoin="round" /></>}
+      {average != null && <line x1="45" x2="338" y1={y(average)} y2={y(average)} stroke="#e5c581" strokeWidth="2" strokeDasharray="5 4" />}
       {points.map((point, index) => <g key={key(point.row)}>
         <circle cx={x(index)} cy={y(point.value)} r="4" fill={color} role="button" tabIndex={0}
           aria-label={`${auctionDateTime(point.row, zone).full} ${securityName(point.row)} ${isSubscription ? "응찰률" : stopName(point.row)} ${percent(point.value, isSubscription ? 1 : 3)}`}

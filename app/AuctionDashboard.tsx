@@ -49,12 +49,15 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
   const previous = priorResult(selectedResult, results);
   const mix = awardMix(selectedResult);
   const previousMix = awardMix(previous);
-  const historicalRows = selectedResult ? results.filter(row => row.type === selectedResult.type && row.term === selectedResult.term && row.auctionDate < selectedResult.auctionDate)
-    .sort((a, b) => b.auctionDate.localeCompare(a.auctionDate)).slice(0, 6) : [];
+  const sameTermRows = selectedResult ? results.filter(row => row.type === selectedResult.type && row.term === selectedResult.term && (row.auctionDate < selectedResult.auctionDate || rowKey(row) === rowKey(selectedResult)))
+    .sort((a, b) => b.auctionDate.localeCompare(a.auctionDate)) : [];
+  const historicalRows = sameTermRows.filter(row => row.auctionDate < selectedResult!.auctionDate).slice(0, 6);
   const validPrevious = historicalRows.map(row => subscriptionPercent(row.bidToCover)).filter((value): value is number => value != null);
   const avgSubscription = average(validPrevious);
   const subscriptionDelta = percentagePointChange(subscriptionPercent(selectedResult?.bidToCover), avgSubscription);
-  const chartRows = resultRows.slice(0, 9).reverse();
+  const comparisonRows = sameTermRows.slice(0, 9).reverse();
+  const recentSubscriptionValues = sameTermRows.map(row => subscriptionPercent(row.bidToCover)).filter((value): value is number => value != null).slice(0, 6);
+  const recentSubscriptionAverage = average(recentSubscriptionValues);
   const stopRows = selectedResult ? [selectedResult, ...historicalRows].reverse() : [];
   const nextBill = planned.find(row => row.type === "Bill");
   const stamp = displayInstant(updatedAt, zone);
@@ -134,8 +137,8 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
         </section>
         <section className="panel charts" aria-label="입찰 차트">
           <article className="chart-cell"><h2 className="panel-heading">낙찰 금리</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {stopRows.length}건</p><AuctionLineChart rows={stopRows} kind="stop" onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch blue" />{stopName(selectedResult)}</span><span className="subtle">When-Issued 미연결</span></div></article>
-          <article className="chart-cell"><h2 className="panel-heading">참여자별 낙찰 비중 (%)</h2><p className="chart-subtitle">최근 {chartRows.length}건 · 전체 낙찰액 기준</p><AllocationChart rows={chartRows} onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch green" />간접</span><span><i className="swatch blue" />직접</span><span><i className="swatch purple" />PD</span><span><i className="swatch gray" />기타</span></div></article>
-          <article className="chart-cell"><h2 className="panel-heading">응찰률 (%)</h2><p className="chart-subtitle">최근 {chartRows.length}건 · {filter === "All" ? "전체 종류·만기" : typeName(filter)} · 입찰별 비교</p><AuctionLineChart rows={chartRows} kind="subscription" onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch pink" />응찰률 (%)</span></div></article>
+          <article className="chart-cell"><h2 className="panel-heading">참여자별 낙찰 비중 (%)</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {comparisonRows.length}건 · 전체 낙찰액 기준</p><AllocationChart rows={comparisonRows} onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch green" />간접</span><span><i className="swatch blue" />직접</span><span><i className="swatch purple" />PD</span><span><i className="swatch gray" />기타</span></div></article>
+          <article className="chart-cell"><h2 className="panel-heading">응찰률 (%)</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {comparisonRows.length}건 · 입찰별 비교</p><AuctionLineChart rows={comparisonRows} kind="subscription" onSelect={selectResult} zone={zone} subscriptionAverage={recentSubscriptionAverage} subscriptionAverageCount={recentSubscriptionValues.length} /><div className="legend"><span><i className="swatch pink" />응찰률 (%)</span><span><i className="swatch" style={{ background: "transparent", borderTop: "2px dashed #e5c581", height: 0 }} />최근 6개 평균 ({recentSubscriptionValues.length}개 유효) {percent(recentSubscriptionAverage, 1)}</span></div></article>
         </section>
 
         <div className="list-controls"><span>결과·예정 일정 종류</span><div className="filter-row" aria-label="국채 종류 필터">{filters.map(name => <button key={name} className={filter === name ? "selected" : ""} aria-pressed={filter === name} onClick={() => { setFilter(name); setSelectedKey(""); }}>{name === "All" ? "전체" : typeName(name)}</button>)}</div></div>

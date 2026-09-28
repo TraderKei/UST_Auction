@@ -41,8 +41,8 @@ test("기본 화면은 다크 UST AUCTION 결과 대시보드", async () => {
 
 test("응찰률 차트 좌표·축도 % 단위이며 누락값을 0으로 만들지 않음", () => {
   const html = renderToStaticMarkup(React.createElement(Dashboard, props));
-  assert.match(html, /aria-label="응찰률 \(%\) 차트"/);
-  const chart = html.match(/<svg[^>]+aria-label="응찰률 \(%\) 차트"[\s\S]*?<\/svg>/)?.[0];
+  assert.match(html, /aria-label="응찰률 \(%\) 차트/);
+  const chart = html.match(/<svg[^>]+aria-label="응찰률 \(%\) 차트[^>]*>[\s\S]*?<\/svg>/)?.[0];
   assert.ok(chart);
   assert.match(chart, /248\.0%/);
   assert.doesNotMatch(chart, /2\.48/);
@@ -50,6 +50,43 @@ test("응찰률 차트 좌표·축도 % 단위이며 누락값을 0으로 만들
   const missing = renderToStaticMarkup(React.createElement(Dashboard, { ...props, results: [{ ...base, bidToCover: null }] }));
   assert.match(missing, /N\/A/);
   assert.doesNotMatch(visibleText(missing), /248\.0%|NaN|Infinity/);
+});
+
+test("배정·응찰률 차트는 선택 입찰과 동일한 종류·만기만 비교하고 최근 6개 유효 응찰률 평균을 표시", () => {
+  const sameTerm = [
+    base,
+    { ...base, auctionDate: "2026-07-20", bidToCover: 2.36 },
+    { ...base, auctionDate: "2026-06-20", bidToCover: null },
+    { ...base, auctionDate: "2026-05-20", bidToCover: 2.6 },
+    { ...base, auctionDate: "2026-04-20", bidToCover: 2.4 },
+    { ...base, auctionDate: "2026-03-20", bidToCover: 2.2 },
+    { ...base, auctionDate: "2026-02-20", bidToCover: 2.5 },
+  ];
+  const sameDateOtherAuction = { ...base, cusip: "TEST00002", bidToCover: 9 };
+  const unrelatedTerm = { ...base, auctionDate: "2026-08-19", term: "2-Year", securityTerm: "2-Year", bidToCover: 9 };
+  const unrelatedType = { ...base, auctionDate: "2026-08-18", type: "Bond", term: "10-Year", securityTerm: "10-Year", bidToCover: 8 };
+  const html = renderToStaticMarkup(React.createElement(Dashboard, { ...props, results: [base, sameDateOtherAuction, unrelatedTerm, unrelatedType, ...sameTerm.slice(1)] }));
+  const allocation = html.match(/<svg[^>]+aria-label="참여자별 낙찰 비중[^>]*>[\s\S]*?<\/svg>/)?.[0];
+  const subscriptionChart = html.match(/<svg[^>]+aria-label="응찰률 \(%\) 차트[^>]*>[\s\S]*?<\/svg>/)?.[0];
+  assert.ok(allocation);
+  assert.ok(subscriptionChart);
+  assert.match(allocation, /10년 중기채/);
+  assert.doesNotMatch(allocation, /2년 중기채|10년 장기채/);
+  assert.match(subscriptionChart, /10년 중기채/);
+  assert.doesNotMatch(subscriptionChart, /2년 중기채|10년 장기채|900\.0%|800\.0%/);
+  assert.match(subscriptionChart, /stroke-dasharray="5 4"/);
+  assert.match(subscriptionChart, /최근 6개 유효 입찰 평균 242\.3% \(6건\)/);
+  assert.match(html, /최근 6개 평균 \(6개 유효\) 242\.3%/);
+});
+
+test("응찰률 평균은 6건 미만이면 확보한 유효값만 사용", () => {
+  const html = renderToStaticMarkup(React.createElement(Dashboard, {
+    ...props,
+    results: [base, { ...base, auctionDate: "2026-07-20", bidToCover: 2.36 }, { ...base, auctionDate: "2026-06-20", bidToCover: null }],
+  }));
+  assert.match(html, /최근 6개 유효 입찰 평균 242\.0% \(2건\)/);
+  assert.match(html, /최근 6개 평균 \(2개 유효\) 242\.0%/);
+  assert.doesNotMatch(html, /0\.0% \(3건\)/);
 });
 
 test("빈 데이터에서도 정상 렌더링하고 임의 시장금리를 만들지 않음", () => {
