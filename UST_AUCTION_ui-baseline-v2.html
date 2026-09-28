@@ -991,6 +991,7 @@ React keys must be passed directly to JSX without using spread:
 <style id="official-live-data-style">
   .official-live-view { padding: 14px 16px 20px; display: grid; gap: 13px; }
   .official-live-view[hidden] { display: none; }
+  .official-live-view [hidden] { display: none !important; }
   .official-live-hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 18px; }
   .official-live-hero h1 { margin: 3px 0 7px; font-size: 25px; }
   .official-live-hero p { color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -1003,6 +1004,7 @@ React keys must be passed directly to JSX without using spread:
   .official-live-kpis { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); }
   .official-live-kpis .kpi { min-height: 142px; }
   .official-live-grid { display: grid; grid-template-columns: minmax(0,1.45fr) minmax(360px,.75fr); gap: 13px; }
+  .official-live-grid.single-view { grid-template-columns: minmax(0,1fr); }
   .official-live-panel { min-width: 0; padding: 15px; }
   .official-live-panel .section-heading { margin-bottom: 11px; }
   .official-live-table button { all: unset; color: inherit; cursor: pointer; width: 100%; }
@@ -1039,7 +1041,7 @@ React keys must be passed directly to JSX without using spread:
       "price_per100", "bid_to_cover_ratio", "allocation_pctage", "total_tendered", "total_accepted", "primary_dealer_accepted",
       "direct_bidder_accepted", "indirect_bidder_accepted"
     ].join(",");
-    const state = { rows: [], results: [], upcoming: [], selected: 0, active: false, range: "" };
+    const state = { rows: [], results: [], upcoming: [], selected: 0, active: false, mode: "overview", range: "" };
 
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
@@ -1145,19 +1147,49 @@ React keys must be passed directly to JSX without using spread:
       }
     }
 
-    function activateLive(scrollTarget) {
+    function applyLiveMode() {
+      const view = ensureView();
+      view.dataset.liveMode = state.mode;
+      const scheduleOnly = state.mode === "schedule";
+      const resultsOnly = state.mode === "results";
+      const facts = view.querySelector(".official-live-facts");
+      const kpis = view.querySelector(".official-live-kpis");
+      const results = view.querySelector("#official-results");
+      const upcoming = view.querySelector("#official-upcoming");
+      if (facts) facts.hidden = scheduleOnly;
+      if (kpis) kpis.hidden = scheduleOnly;
+      if (results) results.hidden = scheduleOnly;
+      if (upcoming) upcoming.hidden = resultsOnly;
+      view.querySelector(".official-live-grid")?.classList.toggle("single-view", scheduleOnly || resultsOnly);
+
+      const selectedRow = state.results[state.selected];
+      const title = view.querySelector("#official-live-title");
+      const description = view.querySelector("#official-live-description");
+      if (title) title.textContent = scheduleOnly ? "공식 예정 입찰 일정" : securityName(selectedRow);
+      if (description) description.textContent = scheduleOnly
+        ? "미국 재무부가 공고해 공식 API로 수신된 예정 입찰만 표시합니다."
+        : "표의 입찰일을 선택하면 KPI가 해당 공식 레코드로 바뀝니다. 날짜는 원문 DATE이며 경쟁마감 시각은 원문 ET입니다.";
+
+      document.querySelectorAll(".nav button").forEach((button) => {
+        const label = button.textContent.trim();
+        const selected = state.mode === "overview"
+          ? button.classList.contains("official-live-tab")
+          : state.mode === "results" ? label === "입찰 결과" : label === "입찰 일정";
+        button.classList.toggle("active", selected);
+        button.setAttribute("aria-pressed", String(selected));
+      });
+    }
+
+    function activateLive(mode = "overview") {
       state.active = true;
+      state.mode = mode;
       const view = ensureView();
       baseNodes().forEach((node) => { node.hidden = true; node.setAttribute("aria-hidden", "true"); });
       const qra = document.getElementById("qra-integrated-view");
       if (qra) qra.hidden = true;
       view.hidden = false;
-      document.querySelectorAll(".nav button").forEach((button) => {
-        const selected = button.classList.contains("official-live-tab");
-        button.classList.toggle("active", selected);
-        button.setAttribute("aria-pressed", String(selected));
-      });
-      if (scrollTarget) document.getElementById(scrollTarget)?.scrollIntoView({ block: "start" });
+      applyLiveMode();
+      window.scrollTo({ top: 0, behavior: "auto" });
     }
 
     function deactivateLive() {
@@ -1179,7 +1211,7 @@ React keys must be passed directly to JSX without using spread:
         tab.textContent = "공식 실데이터";
         tab.setAttribute("aria-pressed", "true");
         nav.insertBefore(tab, nav.firstChild);
-        tab.addEventListener("click", (event) => { event.stopImmediatePropagation(); activateLive(); }, true);
+        tab.addEventListener("click", (event) => { event.stopImmediatePropagation(); activateLive("overview"); }, true);
       }
       nav.querySelectorAll("button:not(.official-live-tab)").forEach((button) => {
         if (button.dataset.officialLiveBound === "true") return;
@@ -1187,7 +1219,7 @@ React keys must be passed directly to JSX without using spread:
         const label = button.textContent.trim();
         button.addEventListener("click", (event) => {
           if (label === "입찰 결과" || label === "입찰 일정") {
-            event.preventDefault(); event.stopImmediatePropagation(); activateLive(label === "입찰 일정" ? "official-upcoming" : "official-results");
+            event.preventDefault(); event.stopImmediatePropagation(); activateLive(label === "입찰 일정" ? "schedule" : "results");
           } else {
             deactivateLive();
           }
@@ -1196,7 +1228,7 @@ React keys must be passed directly to JSX without using spread:
       const brand = document.querySelector(".brand");
       if (brand && brand.dataset.officialLiveBound !== "true") {
         brand.dataset.officialLiveBound = "true";
-        brand.addEventListener("click", (event) => { event.preventDefault(); event.stopImmediatePropagation(); activateLive(); }, true);
+        brand.addEventListener("click", (event) => { event.preventDefault(); event.stopImmediatePropagation(); activateLive("overview"); }, true);
       }
     }
 
@@ -1219,8 +1251,8 @@ React keys must be passed directly to JSX without using spread:
       const upcoming = state.upcoming.slice(0, 30).map((item) => `<tr><td>${escapeHtml(item.auctionDate)}</td><td>${escapeHtml(item.closingTime || "N/A")} · 원문 ET</td>
         <td>${escapeHtml(securityName(item))}${item.reopening ? ' <span class="reopen-badge">재발행</span>' : ""}</td><td>${escapeHtml(money(item.offering))}</td>
         <td>${escapeHtml(item.issueDate || "N/A")}</td><td>${escapeHtml(item.announcementDate || "N/A")}</td></tr>`).join("");
-      view.innerHTML = `<section class="panel official-live-hero"><div><small class="green-text">OFFICIAL LIVE DATA</small><h1>${escapeHtml(securityName(row))}</h1>
-        <p>표의 입찰일을 선택하면 KPI가 해당 공식 레코드로 바뀝니다. 날짜는 원문 DATE이며 경쟁마감 시각은 원문 ET입니다.</p></div>
+      view.innerHTML = `<section class="panel official-live-hero"><div><small class="green-text">OFFICIAL LIVE DATA</small><h1 id="official-live-title">${escapeHtml(securityName(row))}</h1>
+        <p id="official-live-description">표의 입찰일을 선택하면 KPI가 해당 공식 레코드로 바뀝니다. 날짜는 원문 DATE이며 경쟁마감 시각은 원문 ET입니다.</p></div>
         <div class="official-live-source"><a href="${DATASET}" target="_blank" rel="noreferrer">U.S. Treasury Fiscal Data</a><br>조회 범위 ${escapeHtml(state.range)}<br>수신 ${escapeHtml(koreanTime(new Date()))} KST</div></section>
         <section class="official-live-facts" aria-label="선택 입찰 기본 정보">
           <div class="official-live-fact"><small>입찰일</small><strong>${escapeHtml(row?.auctionDate || "N/A")}</strong></div>
@@ -1245,6 +1277,7 @@ React keys must be passed directly to JSX without using spread:
       view.querySelectorAll("[data-result-index]").forEach((button) => button.addEventListener("click", () => {
         state.selected = Number(button.dataset.resultIndex); render();
       }));
+      applyLiveMode();
     }
 
     function renderError(error) {

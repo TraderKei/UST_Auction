@@ -99,7 +99,7 @@ pnpm lint
 ```
 
 - `test:ui`: 인터넷 요청 없이 표시·계산·서머타임·날짜 경계 등 25개 검사
-- `test`: 실행용 빌드와 총 30개 화면·standalone HTML 회귀검사. 테스트 입력은 네트워크와 분리된 합성 레코드이며 운영 fallback 데이터로 사용되지 않습니다.
+- `test`: 실행용 빌드와 총 31개 화면·standalone HTML 회귀검사. 테스트 입력은 네트워크와 분리된 합성 레코드이며 운영 fallback 데이터로 사용되지 않습니다.
 - `lint`: 코드 작성 규칙 검사
 - 전체 TypeScript 형식 검사에는 기존 Cloudflare/DB 형식 선언 오류 3개가 남아 있습니다. 자세한 내용은 `TEST_LOG.md`에 기록했습니다.
 

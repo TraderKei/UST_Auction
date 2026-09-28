@@ -41,3 +41,14 @@ test("standalone loader maps official result fields and has valid JavaScript", a
   ]) assert.ok(script.includes(field), field);
   assert.match(script, /표본값으로 대체하지 않았습니다/);
 });
+
+test("standalone auction navigation switches between result and schedule views", async () => {
+  const { html, script } = await liveScript();
+  assert.match(html, /official-live-view \[hidden\] \{ display: none !important; \}/);
+  assert.match(script, /function applyLiveMode\(\)/);
+  assert.match(script, /activateLive\(label === "입찰 일정" \? "schedule" : "results"\)/);
+  assert.match(script, /results\.hidden = scheduleOnly/);
+  assert.match(script, /upcoming\.hidden = resultsOnly/);
+  assert.match(script, /label === "입찰 결과"/);
+  assert.match(script, /label === "입찰 일정"/);
+});
