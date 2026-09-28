@@ -38,7 +38,7 @@ $env:UST_DEMO_DATABASE_URL='postgresql+psycopg://ust_app@localhost:5432/ust_pipe
 ## 먼저 알아둘 점
 
 - 이전 `.codex/.chatgpt-projects/.../ust-auction-dashboard.html`은 별도 파일입니다. 그 파일을 새로고침해도 현재 프로젝트의 수정은 보이지 않습니다.
-- 저장소의 `UST_AUCTION_ui-baseline-v2.html`은 직접 열면 기본으로 **공식 실데이터** 탭을 활성화하고 Fiscal Data API를 조회합니다. 인터넷 연결이 없거나 API가 실패하면 과거 표본으로 대체하지 않고 수신 실패를 표시합니다.
+- 저장소의 `UST_AUCTION_ui-baseline-v2.html`은 첨부 기준 화면의 디자인·레이아웃·탭 구성을 그대로 유지하면서 Fiscal Data API 결과를 기존 카드·차트·표에 연결합니다. 인터넷 연결이 없거나 API가 실패하면 과거 표본으로 대체하지 않고 기존 영역에 수신 실패를 표시합니다.
 - 이 프로젝트는 **로컬 주소 `http://localhost:3000/`**에서 확인합니다. 서버가 실행 중이어야 열립니다.
 - 화면의 응찰률은 백분율만 표시합니다. 예: API의 원본 배수 2.48 → 화면의 248.0%. 배수와 백분율을 별도 지표로 중복 표시하지 않습니다.
 - 화면은 Fiscal Data Auctions API의 최근 730일과 향후 90일 범위를 조회합니다. 요청 실패·불완전 pagination·결과 0건이면 빈 상태와 원인을 표시하고 과거 표본을 보여주지 않습니다.
@@ -99,7 +99,7 @@ pnpm lint
 ```
 
 - `test:ui`: 인터넷 요청 없이 표시·계산·서머타임·날짜 경계 등 25개 검사
-- `test`: 실행용 빌드와 총 31개 화면·standalone HTML 회귀검사. 테스트 입력은 네트워크와 분리된 합성 레코드이며 운영 fallback 데이터로 사용되지 않습니다.
+- `test`: 실행용 빌드와 총 32개 화면·standalone HTML 회귀검사. 테스트 입력은 네트워크와 분리된 합성 레코드이며 운영 fallback 데이터로 사용되지 않습니다.
 - `lint`: 코드 작성 규칙 검사
 - 전체 TypeScript 형식 검사에는 기존 Cloudflare/DB 형식 선언 오류 3개가 남아 있습니다. 자세한 내용은 `TEST_LOG.md`에 기록했습니다.
 

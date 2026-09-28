@@ -77,7 +77,7 @@ When-Issued와 Tail은 `UNAVAILABLE_SOURCE`, 2Y/10Y/30Y 실시간 시장금리�
 - UI 공식 API live: 범위 2024-09-23~2026-12-22, 결과 882건, 예정 6건, 최신 결과 2026-09-22, 다음 수신 일정 2026-09-23.
 - UI는 하드코딩 fallback을 제거하고 `allocation_pctage`를 Allotted at High에 연결했다. API 실패는 빈 상태로 표시한다.
 - 2026-09-28 React 실데이터 연결 단계 검증: `pnpm test` build 포함 27 passed, `pnpm lint` PASS.
-- 2026-09-28 standalone HTML 연결 및 탭 전환 수정 후: `pnpm test` build 포함 31 passed, `pnpm lint` PASS. inline JavaScript syntax, 기본 실데이터 뷰, 전체 pagination, 필드 매핑, 표본 비대체, 입찰 결과·일정 독립 화면 전환을 검사했다. localhost 렌더링에서 두 메뉴를 실제 클릭해 활성 탭과 표시 표가 각각 전환되고 콘솔 오류가 없음을 확인했다.
+- 2026-09-28 standalone HTML 기준 UI 보존형 연결 수정 후: `pnpm test` build 포함 32 passed, `pnpm lint` PASS. 연결 코드 제거 시 첨부 원본 SHA-256 복원, 기존 DOM 재사용, 전체 pagination, 상품별 Stop·Allotted at High 필드 매핑, API 실패 시 표본 비대체를 검사했다. localhost에서 공식 결과 878건·예정 4건을 수신했고, 1440×900 및 390×844 렌더링, 필터·결과 선택·QRA 탭, 페이지 폭, 콘솔 오류 없음을 확인했다.
 - `Origin: null`로 Fiscal Data API를 요청해 HTTP 200과 `Access-Control-Allow-Origin: *`를 확인했다. 자동 브라우저의 보안 정책은 로컬 `file://` 탐색 자체를 차단하여 시각 캡처는 수행하지 않았다.
 
 이 컴퓨터의 조직 TLS 중간 인증서는 Node 실행에 `$env:NODE_USE_SYSTEM_CA='1'`이 필요했다. TLS 검증을 끄지 않았으며 Python 수집기는 OS truststore로 검증했다. 상세 가용성과 gap은 `ACTUAL_DATA_AVAILABILITY.md`에 기록했다.
