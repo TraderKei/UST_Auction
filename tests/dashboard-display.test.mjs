@@ -5,7 +5,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { loadSource } from "./source-loader.mjs";
 
-const { subscriptionPercent, subscription, awardMix, priorResult, percentagePointChange, signedPoints } = loadSource("../lib/auction-display.ts");
+const { subscriptionPercent, subscription, subscriptionRollingSeries, awardMix, priorResult, percentagePointChange, signedPoints } = loadSource("../lib/auction-display.ts");
 const { normalizeFiscalAuction } = loadSource("../lib/treasury.ts");
 const Dashboard = loadSource("../app/AuctionDashboard.tsx").default;
 const Reference = loadSource("../app/AuctionReference.tsx").default;
@@ -52,7 +52,7 @@ test("응찰률 차트 좌표·축도 % 단위이며 누락값을 0으로 만들
   assert.doesNotMatch(visibleText(missing), /248\.0%|NaN|Infinity/);
 });
 
-test("배정·응찰률 차트는 선택 입찰과 동일한 종류·만기만 비교하고 최근 6개 유효 응찰률 평균을 표시", () => {
+test("배정·응찰률 차트는 선택 입찰과 동일한 종류·만기만 비교하고 롤링 기준 범례를 표시", () => {
   const sameTerm = [
     base,
     { ...base, auctionDate: "2026-07-20", bidToCover: 2.36 },
@@ -74,19 +74,51 @@ test("배정·응찰률 차트는 선택 입찰과 동일한 종류·만기만 �
   assert.doesNotMatch(allocation, /2년 중기채|10년 장기채/);
   assert.match(subscriptionChart, /10년 중기채/);
   assert.doesNotMatch(subscriptionChart, /2년 중기채|10년 장기채|900\.0%|800\.0%/);
-  assert.match(subscriptionChart, /stroke-dasharray="5 4"/);
-  assert.match(subscriptionChart, /최근 6개 유효 입찰 평균 242\.3% \(6건\)/);
-  assert.match(html, /최근 6개 평균 \(6개 유효\) 242\.3%/);
+  assert.match(subscriptionChart, /개별 입찰값, 24개월 평균과 ±1σ, 최근 6회 평균/);
+  assert.doesNotMatch(subscriptionChart, /<polyline[^>]+stroke="#ff5268"/);
+  for (const label of ["개별 입찰값", "24개월 평균", "24개월 평균 ±1σ", "최근 6회 평균"]) assert.ok(html.includes(label), label);
 });
 
-test("응찰률 평균은 6건 미만이면 확보한 유효값만 사용", () => {
-  const html = renderToStaticMarkup(React.createElement(Dashboard, {
-    ...props,
-    results: [base, { ...base, auctionDate: "2026-07-20", bidToCover: 2.36 }, { ...base, auctionDate: "2026-06-20", bidToCover: null }],
+test("응찰률 롤링 계산은 날짜순·시리즈별로 독립적이며 미래값과 결측값을 사용하지 않음", () => {
+  const month = (year, index) => `${year + Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, "0")}-15`;
+  const noteRows = Array.from({ length: 26 }, (_, index) => ({
+    ...base,
+    cusip: `NOTE${index}`,
+    auctionDate: month(2024, index),
+    bidToCover: index === 7 ? null : 2 + index / 100,
   }));
-  assert.match(html, /최근 6개 유효 입찰 평균 242\.0% \(2건\)/);
-  assert.match(html, /최근 6개 평균 \(2개 유효\) 242\.0%/);
-  assert.doesNotMatch(html, /0\.0% \(3건\)/);
+  const unrelated = Array.from({ length: 26 }, (_, index) => ({
+    ...base,
+    cusip: `BILL${index}`,
+    type: "Bill",
+    term: "4-Week",
+    auctionDate: month(2024, index),
+    bidToCover: 9,
+  }));
+  const series = subscriptionRollingSeries([[...unrelated].reverse(), [...noteRows].reverse()].flat());
+  const notes = series.filter(point => point.row.type === "Note");
+  const bills = series.filter(point => point.row.type === "Bill");
+
+  assert.equal(notes[4].average6, null);
+  assert.equal(notes[6].average6, 203.5); // 결측 관측치는 제외하고 최근 유효 6회를 사용
+  assert.equal(notes[22].average24Months, null);
+  const expectedWindow = Array.from({ length: 24 }, (_, index) => index + 1)
+    .filter(index => index !== 7)
+    .map(index => 200 + index);
+  const expectedMean = expectedWindow.reduce((sum, value) => sum + value, 0) / expectedWindow.length;
+  const expectedSigma = Math.sqrt(expectedWindow.reduce((sum, value) => sum + (value - expectedMean) ** 2, 0) / expectedWindow.length);
+  assert.ok(Math.abs(notes[23].average24Months - expectedMean) < 1e-9);
+  assert.ok(Math.abs(notes[23].lower24Months - (expectedMean - expectedSigma)) < 1e-9);
+  assert.ok(Math.abs(notes[23].upper24Months - (expectedMean + expectedSigma)) < 1e-9);
+  assert.equal(bills[24].average24Months, 900);
+  assert.equal(notes[23].row.auctionDate, "2026-01-15");
+
+  const html = renderToStaticMarkup(React.createElement(Dashboard, { ...props, results: [...noteRows].reverse() }));
+  const chart = html.match(/<svg[^>]+aria-label="응찰률 \(%\) 차트[^>]*>[\s\S]*?<\/svg>/)?.[0];
+  assert.ok(chart);
+  assert.match(chart, /class="subscription-band"/);
+  assert.match(chart, /class="subscription-average-24"/);
+  assert.match(chart, /class="subscription-average-6"/);
 });
 
 test("빈 데이터에서도 정상 렌더링하고 임의 시장금리를 만들지 않음", () => {

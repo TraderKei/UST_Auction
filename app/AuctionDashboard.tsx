@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import type { TreasuryAuction } from "../lib/treasury";
 import { average, awardMix, percent, percentagePointChange, priorResult, securityName, signedPoints, stopName, subscription, subscriptionPercent, typeName } from "../lib/auction-display";
 import { auctionDateTime, dateOnly, displayInstant, scheduleRows, zoneLabel, type DisplayZone } from "../lib/auction-time";
-import { AllocationChart, AuctionLineChart } from "./AuctionCharts";
+import { AllocationChart, AuctionLineChart, SubscriptionChart } from "./AuctionCharts";
 import AuctionReference from "./AuctionReference";
 
 type Props = {
@@ -56,8 +56,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
   const avgSubscription = average(validPrevious);
   const subscriptionDelta = percentagePointChange(subscriptionPercent(selectedResult?.bidToCover), avgSubscription);
   const comparisonRows = sameTermRows.slice(0, 9).reverse();
-  const recentSubscriptionValues = sameTermRows.map(row => subscriptionPercent(row.bidToCover)).filter((value): value is number => value != null).slice(0, 6);
-  const recentSubscriptionAverage = average(recentSubscriptionValues);
+  const subscriptionRows = [...sameTermRows].reverse();
   const stopRows = selectedResult ? [selectedResult, ...historicalRows].reverse() : [];
   const nextBill = planned.find(row => row.type === "Bill");
   const stamp = displayInstant(updatedAt, zone);
@@ -138,7 +137,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
         <section className="panel charts" aria-label="입찰 차트">
           <article className="chart-cell"><h2 className="panel-heading">낙찰 금리</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {stopRows.length}건</p><AuctionLineChart rows={stopRows} kind="stop" onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch blue" />{stopName(selectedResult)}</span><span className="subtle">When-Issued 미연결</span></div></article>
           <article className="chart-cell"><h2 className="panel-heading">참여자별 낙찰 비중 (%)</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {comparisonRows.length}건 · 전체 낙찰액 기준</p><AllocationChart rows={comparisonRows} onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch green" />간접</span><span><i className="swatch blue" />직접</span><span><i className="swatch purple" />PD</span><span><i className="swatch gray" />기타</span></div></article>
-          <article className="chart-cell"><h2 className="panel-heading">응찰률 (%)</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {comparisonRows.length}건 · 입찰별 비교</p><AuctionLineChart rows={comparisonRows} kind="subscription" onSelect={selectResult} zone={zone} subscriptionAverage={recentSubscriptionAverage} subscriptionAverageCount={recentSubscriptionValues.length} /><div className="legend"><span><i className="swatch pink" />응찰률 (%)</span><span><i className="swatch" style={{ background: "transparent", borderTop: "2px dashed #e5c581", height: 0 }} />최근 6개 평균 ({recentSubscriptionValues.length}개 유효) {percent(recentSubscriptionAverage, 1)}</span></div></article>
+          <article className="chart-cell"><h2 className="panel-heading">응찰률 (%)</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {subscriptionRows.length}건 · 장기 기준과 최근 흐름</p><SubscriptionChart rows={subscriptionRows} onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="legend-dot" />개별 입찰값</span><span><i className="legend-line baseline" />24개월 평균</span><span><i className="swatch sigma-band" />24개월 평균 ±1σ</span><span><i className="legend-line current" />최근 6회 평균</span></div></article>
         </section>
 
         <div className="list-controls"><span>결과·예정 일정 종류</span><div className="filter-row" aria-label="국채 종류 필터">{filters.map(name => <button key={name} className={filter === name ? "selected" : ""} aria-pressed={filter === name} onClick={() => { setFilter(name); setSelectedKey(""); }}>{name === "All" ? "전체" : typeName(name)}</button>)}</div></div>
