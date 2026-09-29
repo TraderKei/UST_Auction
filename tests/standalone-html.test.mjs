@@ -16,11 +16,13 @@ const connectedAllottedCell = "(0,A.jsx)(`td`,{className:e.allottedAtHigh==null?
 const originalAllocationSubtitle = "(0,A.jsxs)(`p`,{className:`chart-subtitle`,children:[`최근 `,ge.length,`건 · 전체 낙찰액 기준`]})";
 const connectedAllocationSubtitle = "(0,A.jsxs)(`p`,{className:`chart-subtitle`,children:n===`live`?[se(T),` · 동일 종류·만기 `,ge.length,`건 · 전체 낙찰액 기준`]:[`최근 `,ge.length,`건 · 전체 낙찰액 기준`]})";
 const originalSubscriptionSubtitle = "(0,A.jsxs)(`p`,{className:`chart-subtitle`,children:[`최근 `,ge.length,`건 · `,d===`All`?`전체 종류·만기`:oe(d),` · 입찰별 비교`]})";
-const connectedSubscriptionSubtitle = "(0,A.jsxs)(`p`,{className:`chart-subtitle`,children:n===`live`?[se(T),` · 동일 종류·만기 `,ge.length,`건 · 입찰별 비교`]:[`최근 `,ge.length,`건 · `,d===`All`?`전체 종류·만기`:oe(d),` · 입찰별 비교`]})";
+const connectedSubscriptionSubtitle = "(0,A.jsxs)(`p`,{className:`chart-subtitle`,children:[se(T),` · 동일 종류·만기 `,subscriptionRows.length,`건 · 장기 기준과 최근 흐름`]})";
 const originalSubscriptionChart = "(0,A.jsx)(j,{rows:ge,kind:`subscription`,onSelect:Ae,zone:l})";
-const connectedSubscriptionChart = "n===`live`?(0,A.jsx)(Me,{rows:ge,kind:`subscription`,onSelect:Ae,zone:l,subscriptionAverage:recentSubscriptionAverage,subscriptionAverageCount:recentSubscriptionValues.length}):(0,A.jsx)(j,{rows:ge,kind:`subscription`,onSelect:Ae,zone:l})";
+const connectedSubscriptionChart = "(0,A.jsx)(Me,{rows:subscriptionRows,onSelect:Ae,zone:l})";
 const originalSubscriptionLegend = "(0,A.jsx)(`div`,{className:`legend`,children:(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`swatch pink`}),`응찰률 (%)`]})})";
-const connectedSubscriptionLegend = "(0,A.jsx)(`div`,{className:`legend`,children:n===`live`?(0,A.jsxs)(A.Fragment,{children:[(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`swatch pink`}),`응찰률 (%)`]}),(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`swatch`,style:{background:`transparent`,borderTop:`2px dashed #e5c581`,height:0}}),`최근 6개 평균 (`,recentSubscriptionValues.length,`개 유효) `,S(recentSubscriptionAverage,1)]})]}):(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`swatch pink`}),`응찰률 (%)`]})})";
+const connectedSubscriptionLegend = "(0,A.jsxs)(`div`,{className:`legend`,children:[(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`legend-dot`}),`개별 입찰값`]}),(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`legend-line baseline`}),`24개월 평균`]}),(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`swatch sigma-band`}),`24개월 평균 ±1σ`]}),(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`legend-line current`}),`최근 6회 평균`]})]})";
+const originalLegendStyles = ".swatch{border-radius:2px;width:11px;height:10px;display:inline-block}.blue{background:#4b78f4}";
+const rollingLegendStyles = ".swatch{border-radius:2px;width:11px;height:10px;display:inline-block}.legend-dot{background:#ff5268;border:1px solid #ffd0d6;border-radius:50%;width:7px;height:7px;display:inline-block}.legend-line{height:0;border-top-style:solid;width:15px;display:inline-block}.legend-line.baseline{border-top-color:#9aabc1;border-top-width:2px}.legend-line.current{border-top-color:#f3c969;border-top-width:3px}.sigma-band{background:#6f87a833;border:1px solid #8398b4}.blue{background:#4b78f4}";
 
 async function sources() {
   const [html, loader] = await Promise.all([
@@ -39,7 +41,7 @@ test("standalone keeps the attached UI baseline byte-for-byte outside data wirin
   for (const connection of [connectedAllocationSubtitle, connectedSubscriptionSubtitle, connectedSubscriptionChart, connectedSubscriptionLegend]) assert.equal(html.split(connection).length, 2, "one chart data connection must exist");
   const comparisonStart = html.indexOf("sameTermRows=");
   const comparisonEnd = html.indexOf("_e=T?", comparisonStart);
-  const averageChartStart = html.indexOf("function Me({rows:e,kind:t,onSelect:n,zone:r,subscriptionAverage");
+  const averageChartStart = html.indexOf("function ustSubscriptionDate(");
   const averageChartEnd = html.indexOf("function be(", averageChartStart);
   assert.ok(comparisonStart >= 0 && comparisonEnd >= 0, "comparison data wiring must exist");
   assert.ok(averageChartStart >= 0 && averageChartEnd >= 0, "average chart renderer must exist");
@@ -52,6 +54,7 @@ test("standalone keeps the attached UI baseline byte-for-byte outside data wirin
     .replace(connectedSubscriptionSubtitle, originalSubscriptionSubtitle)
     .replace(connectedSubscriptionChart, originalSubscriptionChart)
     .replace(connectedSubscriptionLegend, originalSubscriptionLegend)
+    .replace(rollingLegendStyles, originalLegendStyles)
     .replace(loaderTag, "");
   const restoredComparisonStart = restored.indexOf("sameTermRows=");
   const restoredComparisonEnd = restored.indexOf("_e=T?", restoredComparisonStart);
@@ -69,12 +72,19 @@ test("standalone reuses the baseline dashboard instead of creating another view"
   assert.doesNotMatch(loader, /createElement\(|insertAdjacentHTML|innerHTML\s*=/);
 });
 
-test("standalone live charts use matching type and term with a recent-six average", async () => {
+test("standalone bid-to-cover chart uses points, 24-month average ±1σ, and recent-six rolling average", async () => {
   const { html } = await sources();
   assert.match(html, /e\.type===T\.type&&e\.term===T\.term&&\(e\.auctionDate<T\.auctionDate\|\|M\(e\)===M\(T\)\)/);
-  assert.match(html, /recentSubscriptionValues=.*?filter\(e=>e!=null\)\.slice\(0,6\)/);
-  assert.match(html, /최근 6개 평균/);
-  assert.match(html, /strokeDasharray:`5 4`/);
+  assert.match(html, /subscriptionRows=\[\.\.\.sameTermRows\]\.reverse\(\)/);
+  assert.match(html, /function ustSubscriptionRollingSeries/);
+  assert.match(html, /date\.getTime\(\)>a/);
+  assert.match(html, /average6:i\.length===6/);
+  assert.match(html, /average24Months:s/);
+  assert.match(html, /className:`subscription-band`/);
+  assert.match(html, /className:`subscription-average-24`/);
+  assert.match(html, /className:`subscription-average-6`/);
+  assert.match(html, /24개월 평균 ±1σ/);
+  assert.doesNotMatch(html, /recentSubscriptionAverage|strokeDasharray:`5 4`/);
 });
 
 test("standalone loader follows every Fiscal Data page and rejects partial results", async () => {
@@ -85,6 +95,7 @@ test("standalone loader follows every Fiscal Data page and rejects partial resul
   assert.match(loader, /total-count/);
   assert.match(loader, /rows\.length !== totalCount/);
   assert.match(loader, /pagination incomplete/);
+  assert.match(loader, /addUtcDays\(today, -1461\)/);
 });
 
 test("standalone loader maps official result fields and has valid JavaScript", async () => {

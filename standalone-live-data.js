@@ -153,7 +153,8 @@
     const retrievedAt = new Date();
     const today = new Date(retrievedAt);
     today.setUTCHours(0, 0, 0, 0);
-    const from = isoDate(addUtcDays(today, -730));
+    // 24개월 롤링 기준선의 워밍업 구간을 포함합니다.
+    const from = isoDate(addUtcDays(today, -1461));
     const to = isoDate(addUtcDays(today, 90));
 
     try {
