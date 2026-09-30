@@ -115,7 +115,7 @@ footer span:last-child { color: #8fa5bc; }
 .schedule-note { padding-top: 0; padding-bottom: 10px; border-bottom: 1px solid var(--line2); }
 .chart-box .axis-date { font-size: 9px; }
 .list-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 11px; color: var(--muted); }
-.filter-row { flex-wrap: wrap; }
+.filter-row { min-width: 0; flex-wrap: wrap; }
 .filter-row button { font-size: 11px; }
 .auction-lists { min-width: 0; display: grid; gap: 13px; }
 .results-panel, .schedule-panel { scroll-margin-top: 12px; }

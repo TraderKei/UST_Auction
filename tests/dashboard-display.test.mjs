@@ -7,7 +7,9 @@ import { loadSource } from "./source-loader.mjs";
 
 const { subscriptionPercent, subscription, subscriptionRollingSeries, awardMix, priorResult, percentagePointChange, signedPoints } = loadSource("../lib/auction-display.ts");
 const { normalizeFiscalAuction } = loadSource("../lib/treasury.ts");
-const Dashboard = loadSource("../app/AuctionDashboard.tsx").default;
+const dashboardModule = loadSource("../app/AuctionDashboard.tsx");
+const Dashboard = dashboardModule.default;
+const { auctionFilters, matchesAuctionFilter, filterAuctionRows } = dashboardModule;
 const Reference = loadSource("../app/AuctionReference.tsx").default;
 const base = {
   cusip: "TEST00001", auctionDate: "2026-08-20", announcementDate: "2026-08-13",
@@ -37,6 +39,43 @@ test("기본 화면은 다크 UST AUCTION 결과 대시보드", async () => {
   assert.doesNotMatch(visibleText(html), /FV Terminal|BID\s*\/\s*COVER|Bid-to-cover|\bBTC\b|\d+(?:\.\d+)?\s*[×x]/i);
   assert.match(visibleText(html), /248\.0%/);
   assert.match(html, /응찰률 \(%\)/);
+});
+
+test("필터는 명목 중·장기채를 만기별로 구분하고 FRN·TIPS를 섞지 않음", () => {
+  assert.deepEqual(auctionFilters.map(filter => filter.label), ["전체", "단기채", "2년", "3년", "5년", "7년", "10년", "20년", "30년", "물가연동채", "변동금리채"]);
+  const rows = [
+    { ...base, cusip: "NOTE2", term: "2-Year", securityTerm: "2-Year" },
+    { ...base, cusip: "NOTE3", term: "3-Year", securityTerm: "3-Year" },
+    { ...base, cusip: "NOTE10", term: "9-Year 10-Month", securityTerm: "10-Year" },
+    { ...base, cusip: "FRN2", type: "FRN", term: "2-Year", securityTerm: "2-Year" },
+    { ...base, cusip: "BOND20", type: "Bond", term: "20-Year", securityTerm: "20-Year" },
+    { ...base, cusip: "BOND30", type: "Bond", term: "30-Year", securityTerm: "30-Year" },
+    { ...base, cusip: "TIPS10", type: "TIPS", term: "10-Year", securityTerm: "10-Year" },
+    { ...base, cusip: "TIPS20", type: "TIPS", term: "20-Year", securityTerm: "20-Year" },
+    { ...base, cusip: "TIPS30", type: "TIPS", term: "30-Year", securityTerm: "30-Year" },
+  ];
+
+  assert.deepEqual(filterAuctionRows(rows, "note-2").map(row => row.cusip), ["NOTE2"]);
+  assert.deepEqual(filterAuctionRows(rows, "note-10").map(row => row.cusip), ["NOTE10"]);
+  assert.deepEqual(filterAuctionRows(rows, "bond-20").map(row => row.cusip), ["BOND20"]);
+  assert.deepEqual(filterAuctionRows(rows, "bond-30").map(row => row.cusip), ["BOND30"]);
+  assert.deepEqual(filterAuctionRows(rows, "tips").map(row => row.cusip), ["TIPS10", "TIPS20", "TIPS30"]);
+  assert.deepEqual(filterAuctionRows(rows, "frn").map(row => row.cusip), ["FRN2"]);
+  assert.equal(matchesAuctionFilter(rows[2], "note-10"), true); // securityTerm 대체 경로
+  assert.deepEqual(filterAuctionRows(rows, "note-5"), []);
+});
+
+test("결과·예정 표는 같은 필터 판별을 사용하고 필터 변경 시 선택을 초기화", async () => {
+  const source = await readFile(new URL("../app/AuctionDashboard.tsx", import.meta.url), "utf8");
+  assert.match(source, /filterAuctionRows\(results, filter\)/);
+  assert.match(source, /filterAuctionRows\(planned, filter\)/);
+  assert.match(source, /changeFilter = \(next: AuctionFilterId\) => \{ setFilter\(next\); setSelectedKey\(""\); \}/);
+
+  const html = renderToStaticMarkup(React.createElement(Dashboard, props));
+  assert.match(html, /role="group" aria-label="국채 종류 및 명목 중·장기채 만기 필터"/);
+  assert.match(html, />2년<\/button>/);
+  assert.match(html, />30년<\/button>/);
+  assert.doesNotMatch(html, />중기채<\/button>|>장기채<\/button>/);
 });
 
 test("응찰률 차트 좌표·축도 % 단위이며 누락값을 0으로 만들지 않음", () => {

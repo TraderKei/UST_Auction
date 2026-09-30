@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { TreasuryAuction } from "../lib/treasury";
-import { average, awardMix, percent, percentagePointChange, priorResult, securityName, signedPoints, stopName, subscription, subscriptionPercent, typeName } from "../lib/auction-display";
+import { average, awardMix, percent, percentagePointChange, priorResult, securityName, signedPoints, stopName, subscription, subscriptionPercent } from "../lib/auction-display";
 import { auctionDateTime, dateOnly, displayInstant, scheduleRows, zoneLabel, type DisplayZone } from "../lib/auction-time";
 import { AllocationChart, AuctionLineChart, SubscriptionChart } from "./AuctionCharts";
 import AuctionReference from "./AuctionReference";
@@ -22,7 +22,37 @@ type Tab = "calendar" | "results";
 const rowKey = (row: TreasuryAuction) => `${row.cusip}-${row.auctionDate}`;
 const money = (value: number | null | undefined) => value == null ? "N/A" : `$${(value / 1e9).toFixed(1)}B`;
 const price = (value: number | null | undefined) => value == null ? "N/A" : value.toFixed(4);
-const filters = ["All", "Bill", "Note", "Bond", "TIPS", "FRN"];
+const filterIds = ["all", "bill", "note-2", "note-3", "note-5", "note-7", "note-10", "bond-20", "bond-30", "tips", "frn"] as const;
+export type AuctionFilterId = typeof filterIds[number];
+type AuctionFilterDefinition = {
+  id: AuctionFilterId;
+  label: string;
+  type?: TreasuryAuction["type"];
+  term?: string;
+};
+export const auctionFilters: readonly AuctionFilterDefinition[] = [
+  { id: "all", label: "전체" },
+  { id: "bill", label: "단기채", type: "Bill" },
+  { id: "note-2", label: "2년", type: "Note", term: "2-Year" },
+  { id: "note-3", label: "3년", type: "Note", term: "3-Year" },
+  { id: "note-5", label: "5년", type: "Note", term: "5-Year" },
+  { id: "note-7", label: "7년", type: "Note", term: "7-Year" },
+  { id: "note-10", label: "10년", type: "Note", term: "10-Year" },
+  { id: "bond-20", label: "20년", type: "Bond", term: "20-Year" },
+  { id: "bond-30", label: "30년", type: "Bond", term: "30-Year" },
+  { id: "tips", label: "물가연동채", type: "TIPS" },
+  { id: "frn", label: "변동금리채", type: "FRN" },
+];
+
+export function matchesAuctionFilter(row: TreasuryAuction, filterId: AuctionFilterId): boolean {
+  const definition = auctionFilters.find(filter => filter.id === filterId);
+  if (!definition) return false;
+  if (!definition.type) return true;
+  if (row.type !== definition.type) return false;
+  return !definition.term || row.term === definition.term || row.securityTerm === definition.term;
+}
+
+export const filterAuctionRows = (rows: TreasuryAuction[], filterId: AuctionFilterId) => rows.filter(row => matchesAuctionFilter(row, filterId));
 
 function AuctionDate({ row, zone, withTime = false }: { row: TreasuryAuction | undefined; zone: DisplayZone; withTime?: boolean }) {
   const value = auctionDateTime(row, zone);
@@ -36,13 +66,13 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
   const [view, setView] = useState<View>("market");
   const [tab, setTab] = useState<Tab>("results");
   const [zone, setZone] = useState<DisplayZone>(initialZone);
-  const [filter, setFilter] = useState("All");
+  const [filter, setFilter] = useState<AuctionFilterId>("all");
   const [selectedKey, setSelectedKey] = useState("");
   const resultRef = useRef<HTMLElement>(null);
   const calendarRef = useRef<HTMLElement>(null);
   const planned = useMemo(() => scheduleRows(upcoming, updatedAt), [upcoming, updatedAt]);
-  const resultRows = useMemo(() => results.filter(row => filter === "All" || row.type === filter), [results, filter]);
-  const calendarRows = useMemo(() => planned.filter(row => filter === "All" || row.type === filter), [planned, filter]);
+  const resultRows = useMemo(() => filterAuctionRows(results, filter), [results, filter]);
+  const calendarRows = useMemo(() => filterAuctionRows(planned, filter), [planned, filter]);
   const filtered = tab === "calendar" ? calendarRows : resultRows;
   const selectedRow = filtered.find(row => rowKey(row) === selectedKey) ?? filtered[0];
   const selectedResult = tab === "results" ? selectedRow : priorResult(selectedRow, results);
@@ -62,15 +92,16 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
   const stamp = displayInstant(updatedAt, zone);
   const selectedTime = auctionDateTime(selectedRow, zone);
   const changeTab = (next: Tab) => {
-    setView("market"); setTab(next); setFilter("All"); setSelectedKey("");
+    setView("market"); setTab(next); setFilter("all"); setSelectedKey("");
     (next === "calendar" ? calendarRef : resultRef).current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  const changeFilter = (next: AuctionFilterId) => { setFilter(next); setSelectedKey(""); };
   const select = (row: TreasuryAuction, next: Tab) => { setView("market"); setTab(next); setSelectedKey(rowKey(row)); };
   const selectResult = (row: TreasuryAuction) => select(row, "results");
 
   return <div className="terminal-shell" data-theme="dark">
     <header className="topbar">
-      <button className="brand" onClick={() => { setView("market"); setTab("results"); setFilter("All"); setSelectedKey(""); }} aria-label="UST AUCTION 처음으로"><span className="bank" aria-hidden="true" /><span>UST AUCTION</span></button>
+      <button className="brand" onClick={() => { setView("market"); setTab("results"); setFilter("all"); setSelectedKey(""); }} aria-label="UST AUCTION 처음으로"><span className="bank" aria-hidden="true" /><span>UST AUCTION</span></button>
       <nav className="nav" aria-label="주요 메뉴">
         <button className={view === "market" && tab === "calendar" ? "active" : ""} aria-pressed={view === "market" && tab === "calendar"} onClick={() => changeTab("calendar")}>입찰 일정</button>
         <button className={view === "market" && tab === "results" ? "active" : ""} aria-pressed={view === "market" && tab === "results"} onClick={() => changeTab("results")}>입찰 결과</button>
@@ -140,7 +171,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
           <article className="chart-cell"><h2 className="panel-heading">응찰률 (%)</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {subscriptionRows.length}건 · 장기 기준과 최근 흐름</p><SubscriptionChart rows={subscriptionRows} onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="legend-dot" />개별 입찰값</span><span><i className="legend-line baseline" />24개월 평균</span><span><i className="swatch sigma-band" />24개월 평균 ±1σ</span><span><i className="legend-line current" />최근 6회 평균</span></div></article>
         </section>
 
-        <div className="list-controls"><span>결과·예정 일정 종류</span><div className="filter-row" aria-label="국채 종류 필터">{filters.map(name => <button key={name} className={filter === name ? "selected" : ""} aria-pressed={filter === name} onClick={() => { setFilter(name); setSelectedKey(""); }}>{name === "All" ? "전체" : typeName(name)}</button>)}</div></div>
+        <div className="list-controls"><span>결과·예정 일정 종류</span><div className="filter-row" role="group" aria-label="국채 종류 및 명목 중·장기채 만기 필터">{auctionFilters.map(option => <button key={option.id} className={filter === option.id ? "selected" : ""} aria-pressed={filter === option.id} onClick={() => changeFilter(option.id)}>{option.label}</button>)}</div></div>
         <section className="bottom-row">
           <div className="auction-lists">
             <section className="panel results-panel" id="auction-results" ref={resultRef}>
