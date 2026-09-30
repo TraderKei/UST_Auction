@@ -22,15 +22,13 @@ type Tab = "calendar" | "results";
 const rowKey = (row: TreasuryAuction) => `${row.cusip}-${row.auctionDate}`;
 const money = (value: number | null | undefined) => value == null ? "N/A" : `$${(value / 1e9).toFixed(1)}B`;
 const price = (value: number | null | undefined) => value == null ? "N/A" : value.toFixed(4);
-const filterIds = ["all", "bill", "note-2", "note-3", "note-5", "note-7", "note-10", "bond-20", "bond-30", "tips", "frn"] as const;
-export type AuctionFilterId = typeof filterIds[number];
 type AuctionFilterDefinition = {
-  id: AuctionFilterId;
+  id: string;
   label: string;
   type?: TreasuryAuction["type"];
   term?: string;
 };
-export const auctionFilters: readonly AuctionFilterDefinition[] = [
+export const auctionFilters = [
   { id: "all", label: "전체" },
   { id: "bill", label: "단기채", type: "Bill" },
   { id: "note-2", label: "2년", type: "Note", term: "2-Year" },
@@ -42,10 +40,11 @@ export const auctionFilters: readonly AuctionFilterDefinition[] = [
   { id: "bond-30", label: "30년", type: "Bond", term: "30-Year" },
   { id: "tips", label: "물가연동채", type: "TIPS" },
   { id: "frn", label: "변동금리채", type: "FRN" },
-];
+] as const satisfies readonly AuctionFilterDefinition[];
+export type AuctionFilterId = typeof auctionFilters[number]["id"];
 
 export function matchesAuctionFilter(row: TreasuryAuction, filterId: AuctionFilterId): boolean {
-  const definition = auctionFilters.find(filter => filter.id === filterId);
+  const definition: AuctionFilterDefinition | undefined = auctionFilters.find(filter => filter.id === filterId);
   if (!definition) return false;
   if (!definition.type) return true;
   if (row.type !== definition.type) return false;

@@ -5,7 +5,7 @@ import test from "node:test";
 
 const htmlUrl = new URL("../UST_AUCTION_ui-baseline-v2.html", import.meta.url);
 const loaderUrl = new URL("../standalone-live-data.js", import.meta.url);
-const baselineSha256 = "d5a19347baf26ea48fff6e159e7b0992fea67481fbd146804f9ff2b62e5f1b4e";
+const baselineSha256 = "883dcc608f313d3de0a895ba994d160e97ce2fbae91ecedacb20fa6b5ce9858b";
 const originalHydration = "(0,ee.hydrateRoot)(je,x.createElement(ke,Ae))";
 const connectedHydration = "window.__UST_AUCTION_ROOT__=(0,ee.hydrateRoot)(je,x.createElement(ke,Ae)),window.__UST_RENDER_AUCTIONS__=e=>window.__UST_AUCTION_ROOT__.render(x.createElement(ke,e))";
 const loaderTag = '<script src="./standalone-live-data.js"></script>\n';
@@ -32,7 +32,7 @@ async function sources() {
   return { html, loader };
 }
 
-test("standalone keeps the attached UI baseline byte-for-byte outside data wiring", async () => {
+test("standalone keeps the approved UI baseline byte-for-byte outside data and filter wiring", async () => {
   const { html } = await sources();
   assert.equal(html.split(connectedHydration).length, 2, "one renderer connection must exist");
   assert.equal(html.split(connectedAllottedCard).length, 2, "one Allotted at High connection must exist");
@@ -62,6 +62,24 @@ test("standalone keeps the attached UI baseline byte-for-byte outside data wirin
     + "ge=v.slice(0,9).reverse(),"
     + restored.slice(restoredComparisonEnd);
   assert.equal(createHash("sha256").update(baselineRestored).digest("hex"), baselineSha256);
+});
+
+test("standalone offers nominal maturity filters without mixing FRN or TIPS", async () => {
+  const { html } = await sources();
+  assert.match(html, /class="filter-row" role="group" aria-label="국채 종류 및 명목 중·장기채 만기 필터"/);
+  for (const label of ["전체", "단기채", "2년", "3년", "5년", "7년", "10년", "20년", "30년", "물가연동채", "변동금리채"]) {
+    assert.match(html, new RegExp(`>${label}<\\/button>`), label);
+  }
+  assert.doesNotMatch(html, />중기채<\/button>|>장기채<\/button>/);
+  assert.match(html, /\{id:`note-2`,label:`2년`,type:`Note`,term:`2-Year`\}/);
+  assert.match(html, /\{id:`note-10`,label:`10년`,type:`Note`,term:`10-Year`\}/);
+  assert.match(html, /\{id:`bond-20`,label:`20년`,type:`Bond`,term:`20-Year`\}/);
+  assert.match(html, /\{id:`bond-30`,label:`30년`,type:`Bond`,term:`30-Year`\}/);
+  assert.match(html, /e\.type===n\.type&&\(!n\.term\|\|e\.term===n\.term\|\|e\.securityTerm===n\.term\)/);
+  assert.equal(html.split("filter(e=>ustMatchesAuctionFilter(e,d))").length, 3, "results and schedule must share the matcher");
+  assert.match(html, /className:`filter-row`,role:`group`/);
+  assert.match(html, /className:d===e\.id\?`selected`/);
+  assert.match(html, /\.filter-row\{flex-wrap:wrap;min-width:0\}/);
 });
 
 test("standalone reuses the baseline dashboard instead of creating another view", async () => {
