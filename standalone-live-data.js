@@ -19,6 +19,41 @@
   };
   const yes = (value) => String(value ?? "").trim().toLowerCase() === "yes";
   const isoDate = (value) => value.toISOString().slice(0, 10);
+  const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const dateParts = (value) => {
+    const match = ISO_DATE.exec(value);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+      ? { year, month, day }
+      : null;
+  };
+  const formatDate = (year, month, day) => `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const lastDayOfMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const shiftCalendarMonths = (value, months) => {
+    const parts = dateParts(value);
+    if (!parts || !Number.isInteger(months)) throw new Error("Invalid calendar-month shift");
+    const monthIndex = parts.year * 12 + parts.month - 1 + months;
+    const year = Math.floor(monthIndex / 12);
+    const month = monthIndex - year * 12 + 1;
+    return formatDate(year, month, Math.min(parts.day, lastDayOfMonth(year, month)));
+  };
+  const defaultRange = (today) => {
+    const to = isoDate(today);
+    const parts = dateParts(to);
+    const year = parts.year - 2;
+    return { from: formatDate(year, parts.month, Math.min(parts.day, lastDayOfMonth(year, parts.month))), to };
+  };
+  const selectedRange = (today) => {
+    const defaults = defaultRange(today);
+    const parameters = new URL(window.location.href).searchParams;
+    const from = parameters.get("from");
+    const to = parameters.get("to");
+    return dateParts(from || "") && dateParts(to || "") && from <= to ? { from, to } : defaults;
+  };
   const addUtcDays = (value, days) => {
     const copy = new Date(value);
     copy.setUTCDate(copy.getUTCDate() + days);
@@ -153,9 +188,12 @@
     const retrievedAt = new Date();
     const today = new Date(retrievedAt);
     today.setUTCHours(0, 0, 0, 0);
-    // 24개월 롤링 기준선의 워밍업 구간을 포함합니다.
-    const from = isoDate(addUtcDays(today, -1461));
-    const to = isoDate(addUtcDays(today, 90));
+    const defaults = defaultRange(today);
+    const range = selectedRange(today);
+    const upcomingTo = isoDate(addUtcDays(today, 90));
+    // 표시 시작일 이전 24개월 롤링 기준선과 직전 관측치를 함께 확보합니다.
+    const from = shiftCalendarMonths(range.from, -25);
+    const to = range.to > upcomingTo ? range.to : upcomingTo;
 
     try {
       const rows = (await fetchRows(from, to))
@@ -166,7 +204,7 @@
         .filter((row) => row.bidToCover !== null)
         .sort((a, b) => b.auctionDate.localeCompare(a.auctionDate) || a.cusip.localeCompare(b.cusip));
       const upcoming = rows
-        .filter((row) => row.auctionDate >= todayText && row.bidToCover === null)
+        .filter((row) => row.auctionDate >= todayText && row.auctionDate <= upcomingTo && row.bidToCover === null)
         .sort((a, b) => a.auctionDate.localeCompare(b.auctionDate) || a.cusip.localeCompare(b.cusip));
       if (!results.length) throw new Error("Fiscal Data API returned no auction results");
 
@@ -175,6 +213,10 @@
         results,
         source: "live",
         updatedAt: retrievedAt.toISOString(),
+        resultFrom: range.from,
+        resultTo: range.to,
+        defaultResultFrom: defaults.from,
+        defaultResultTo: defaults.to,
       });
       const message = `미국 재무부 Fiscal Data 공식 API 자료입니다. 조회 범위 ${from}~${to}, 결과 ${results.length}건, 예정 ${upcoming.length}건.`;
       requestAnimationFrame(() => keepStatusVisible("live", "공식 API 수신", message));
@@ -184,6 +226,10 @@
         results: [],
         source: "unavailable",
         updatedAt: retrievedAt.toISOString(),
+        resultFrom: range.from,
+        resultTo: range.to,
+        defaultResultFrom: defaults.from,
+        defaultResultTo: defaults.to,
       });
       const reason = error instanceof Error ? error.message : String(error);
       requestAnimationFrame(() => keepStatusVisible(
