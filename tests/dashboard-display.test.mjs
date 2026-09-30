@@ -7,9 +7,10 @@ import { loadSource } from "./source-loader.mjs";
 
 const { subscriptionPercent, subscription, subscriptionRollingSeries, awardMix, priorResult, percentagePointChange, signedPoints } = loadSource("../lib/auction-display.ts");
 const { normalizeFiscalAuction } = loadSource("../lib/treasury.ts");
+const { defaultAuctionDateRange, filterAuctionsByDateRange, isIsoDate, resolveAuctionDateRange, shiftCalendarMonths, shiftCalendarYears, validateAuctionDateRange } = loadSource("../lib/auction-date-range.ts");
 const dashboardModule = loadSource("../app/AuctionDashboard.tsx");
 const Dashboard = dashboardModule.default;
-const { auctionFilters, matchesAuctionFilter, filterAuctionRows } = dashboardModule;
+const { auctionFilters, matchesAuctionFilter, filterAuctionRows, filterResultRows } = dashboardModule;
 const Reference = loadSource("../app/AuctionReference.tsx").default;
 const base = {
   cusip: "TEST00001", auctionDate: "2026-08-20", announcementDate: "2026-08-13",
@@ -19,8 +20,45 @@ const base = {
   investmentRate: null, couponRate: 4.25, pricePer100: 99.8125, totalTendered: 104.16e9,
   totalAccepted: 42e9, dealerAccepted: 6.3e9, directAccepted: 8.4e9, indirectAccepted: 25.2e9,
 };
-const props = { upcoming: [], results: [base], source: "unavailable", updatedAt: "2026-08-21T06:30:00Z" };
+const props = {
+  upcoming: [], results: [base], source: "unavailable", updatedAt: "2026-08-21T06:30:00Z",
+  resultFrom: "2024-08-21", resultTo: "2026-08-21", defaultResultFrom: "2024-08-21", defaultResultTo: "2026-08-21",
+};
 const visibleText = html => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
+test("기본 조회기간은 달력 기준 최근 2년이며 윤년·월말을 안전하게 처리", () => {
+  assert.deepEqual(defaultAuctionDateRange(new Date("2026-09-30T23:59:59Z")), { from: "2024-09-30", to: "2026-09-30" });
+  assert.equal(shiftCalendarYears("2024-02-29", -2), "2022-02-28");
+  assert.equal(shiftCalendarMonths("2024-03-31", -1), "2024-02-29");
+  assert.equal(isIsoDate("2026-02-29"), false);
+  assert.equal(isIsoDate("2024-02-29"), true);
+});
+
+test("URL 조회기간은 엄격히 검증하고 잘못된 값은 최근 2년으로 복구", () => {
+  const today = new Date("2026-09-30T12:00:00Z");
+  assert.deepEqual(resolveAuctionDateRange({ from: "2020-01-01", to: "2020-12-31" }, today), { from: "2020-01-01", to: "2020-12-31" });
+  for (const parameters of [
+    { from: "2026-02-29", to: "2026-09-30" },
+    { from: "2026-10-01", to: "2026-09-30" },
+    { from: "", to: "2026-09-30" },
+  ]) assert.deepEqual(resolveAuctionDateRange(parameters, today), { from: "2024-09-30", to: "2026-09-30" });
+  assert.equal(validateAuctionDateRange("", "2026-09-30"), "시작일과 종료일을 모두 입력해 주세요.");
+  assert.equal(validateAuctionDateRange("2026-10-01", "2026-09-30"), "시작일은 종료일보다 늦을 수 없습니다.");
+});
+
+test("결과 날짜 범위는 양쪽 경계를 포함하고 종류 필터와 AND로 결합", () => {
+  const rows = [
+    { ...base, cusip: "FROM", auctionDate: "2025-01-01", term: "2-Year", securityTerm: "2-Year" },
+    { ...base, cusip: "MIDDLE", auctionDate: "2025-06-01", term: "2-Year", securityTerm: "2-Year" },
+    { ...base, cusip: "OTHER", auctionDate: "2025-07-01", term: "10-Year", securityTerm: "10-Year" },
+    { ...base, cusip: "TO", auctionDate: "2025-12-31", term: "2-Year", securityTerm: "2-Year" },
+    { ...base, cusip: "OUTSIDE", auctionDate: "2026-01-01", term: "2-Year", securityTerm: "2-Year" },
+  ];
+  const range = { from: "2025-01-01", to: "2025-12-31" };
+  assert.deepEqual(filterAuctionsByDateRange(rows, range).map(row => row.cusip), ["FROM", "MIDDLE", "OTHER", "TO"]);
+  assert.deepEqual(filterResultRows(rows, "note-2", range.from, range.to).map(row => row.cusip), ["FROM", "MIDDLE", "TO"]);
+  assert.deepEqual(filterResultRows(rows, "note-3", range.from, range.to), []);
+});
 
 test("응찰률: 2.48 → 248.0%, 결측값은 N/A, 0은 0.0%", () => {
   assert.equal(subscriptionPercent(2.48), 248);
@@ -67,15 +105,50 @@ test("필터는 명목 중·장기채를 만기별로 구분하고 FRN·TIPS를 
 
 test("결과·예정 표는 같은 필터 판별을 사용하고 필터 변경 시 선택을 초기화", async () => {
   const source = await readFile(new URL("../app/AuctionDashboard.tsx", import.meta.url), "utf8");
-  assert.match(source, /filterAuctionRows\(results, filter\)/);
+  assert.match(source, /filterResultRows\(results, filter, initialFrom, initialTo\)/);
   assert.match(source, /filterAuctionRows\(planned, filter\)/);
   assert.match(source, /changeFilter = \(next: AuctionFilterId\) => \{ setFilter\(next\); setSelectedKey\(""\); \}/);
+  assert.match(source, /filtered\.find\(row => rowKey\(row\) === selectedKey\) \?\? filtered\[0\]/);
 
   const html = renderToStaticMarkup(React.createElement(Dashboard, props));
   assert.match(html, /role="group" aria-label="국채 종류 및 명목 중·장기채 만기 필터"/);
   assert.match(html, />2년<\/button>/);
   assert.match(html, />30년<\/button>/);
   assert.doesNotMatch(html, />중기채<\/button>|>장기채<\/button>/);
+});
+
+test("결과 기간 UI는 접근 가능한 두 캘린더·조회·초기화와 공유 가능한 URL을 제공", async () => {
+  const html = renderToStaticMarkup(React.createElement(Dashboard, props));
+  assert.match(html, /<label for="auction-result-from"><span>From<\/span>/);
+  assert.match(html, /<input id="auction-result-from"[^>]*type="date"[^>]*value="2024-08-21"/);
+  assert.match(html, /<label for="auction-result-to"><span>To<\/span>/);
+  assert.match(html, /<input id="auction-result-to"[^>]*type="date"[^>]*value="2026-08-21"/);
+  assert.match(html, />조회<\/button><button type="button" class="date-range-reset">최근 2년<\/button>/);
+  assert.match(html, /2024-08-21 ~ 2026-08-21 · 1건/);
+
+  const source = await readFile(new URL("../app/AuctionDashboard.tsx", import.meta.url), "utf8");
+  assert.match(source, /url\.searchParams\.set\("from", from\)/);
+  assert.match(source, /url\.searchParams\.set\("to", to\)/);
+  assert.match(source, /window\.location\.assign\(url\.toString\(\)\)/);
+  assert.match(source, /role="alert"/);
+});
+
+test("0건 결과는 적용 기간을 표시하고 예정 일정에는 날짜 필터를 적용하지 않음", () => {
+  const outside = { ...base, auctionDate: "2023-12-31" };
+  const upcoming = { ...base, auctionDate: "2026-08-25" };
+  const html = renderToStaticMarkup(React.createElement(Dashboard, { ...props, results: [outside], upcoming: [upcoming] }));
+  assert.match(html, /결과 없음 · 2024-08-21 ~ 2026-08-21 기간과 조건에 맞는 입찰 결과가 없습니다/);
+  assert.match(html, /예정 1건/);
+  assert.match(html, /2026-08-26 02:00 · 한국 KST/);
+});
+
+test("페이지는 URL 기간을 서버 조회에 전달하고 API는 롤링 워밍업과 고정 예정 범위를 사용", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const treasury = await readFile(new URL("../lib/treasury.ts", import.meta.url), "utf8");
+  assert.match(page, /resolveAuctionDateRange\(await searchParams, today\)/);
+  assert.match(page, /getTreasuryData\(resultRange\)/);
+  assert.match(treasury, /shiftCalendarMonths\(visibleRange\.from, -25\)/);
+  assert.match(treasury, /row\.auctionDate <= upcomingTo/);
 });
 
 test("응찰률 차트 좌표·축도 % 단위이며 누락값을 0으로 만들지 않음", () => {

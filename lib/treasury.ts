@@ -1,3 +1,5 @@
+import { defaultAuctionDateRange, shiftCalendarMonths, type AuctionDateRange } from "./auction-date-range";
+
 export type TreasuryAuction = {
   cusip: string;
   auctionDate: string;
@@ -151,13 +153,15 @@ async function fetchFiscalRows(from: string, to: string) {
   return rows;
 }
 
-export async function getTreasuryData(): Promise<TreasuryData> {
+export async function getTreasuryData(resultRange?: AuctionDateRange): Promise<TreasuryData> {
   const retrievedAt = new Date();
   const today = new Date(retrievedAt);
   today.setUTCHours(0, 0, 0, 0);
-  // 24개월 롤링 기준선에 완전한 워밍업 구간과 실제 표시 구간을 함께 제공합니다.
-  const from = isoDate(addUtcDays(today, -1461));
-  const to = isoDate(addUtcDays(today, 90));
+  const visibleRange = resultRange ?? defaultAuctionDateRange(today);
+  const upcomingTo = isoDate(addUtcDays(today, 90));
+  // 24개월 롤링 창 직전 관측치까지 확보할 수 있도록 한 달의 여유를 둡니다.
+  const from = shiftCalendarMonths(visibleRange.from, -25);
+  const to = visibleRange.to > upcomingTo ? visibleRange.to : upcomingTo;
   const sourceRange = `${from}~${to}`;
   try {
     const rows = (await fetchFiscalRows(from, to))
@@ -165,7 +169,7 @@ export async function getTreasuryData(): Promise<TreasuryData> {
       .filter((row) => row.cusip && row.auctionDate);
     const todayText = isoDate(today);
     const upcoming = rows
-      .filter((row) => row.auctionDate >= todayText && row.bidToCover === null)
+      .filter((row) => row.auctionDate >= todayText && row.auctionDate <= upcomingTo && row.bidToCover === null)
       .sort((a, b) => a.auctionDate.localeCompare(b.auctionDate) || a.cusip.localeCompare(b.cusip));
     const results = rows
       .filter((row) => row.bidToCover !== null)

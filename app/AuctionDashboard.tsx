@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { TreasuryAuction } from "../lib/treasury";
+import { defaultAuctionDateRange, filterAuctionsByDateRange, validateAuctionDateRange } from "../lib/auction-date-range";
 import { average, awardMix, percent, percentagePointChange, priorResult, securityName, signedPoints, stopName, subscription, subscriptionPercent } from "../lib/auction-display";
 import { auctionDateTime, dateOnly, displayInstant, scheduleRows, zoneLabel, type DisplayZone } from "../lib/auction-time";
 import { AllocationChart, AuctionLineChart, SubscriptionChart } from "./AuctionCharts";
@@ -16,6 +17,10 @@ type Props = {
   sourceRange?: string;
   sourceError?: string;
   initialZone?: DisplayZone;
+  resultFrom?: string;
+  resultTo?: string;
+  defaultResultFrom?: string;
+  defaultResultTo?: string;
 };
 type View = "market" | "api" | "database";
 type Tab = "calendar" | "results";
@@ -53,6 +58,9 @@ export function matchesAuctionFilter(row: TreasuryAuction, filterId: AuctionFilt
 
 export const filterAuctionRows = (rows: TreasuryAuction[], filterId: AuctionFilterId) => rows.filter(row => matchesAuctionFilter(row, filterId));
 
+export const filterResultRows = (rows: TreasuryAuction[], filterId: AuctionFilterId, from: string, to: string) =>
+  filterAuctionRows(filterAuctionsByDateRange(rows, { from, to }), filterId);
+
 function AuctionDate({ row, zone, withTime = false }: { row: TreasuryAuction | undefined; zone: DisplayZone; withTime?: boolean }) {
   const value = auctionDateTime(row, zone);
   return <span className="date-cell"><span>{value.date}</span><small>{withTime ? `${value.time} · ` : ""}{value.basis}</small></span>;
@@ -61,16 +69,24 @@ function CalendarDate({ value }: { value: string | undefined }) {
   return <span className="date-cell"><span>{dateOnly(value)}</span><small>원문 ET · 시각 없음</small></span>;
 }
 
-export default function AuctionDashboard({ upcoming, results, source, updatedAt, sourceUrl, sourceRange, sourceError, initialZone = "KST" }: Props) {
+export default function AuctionDashboard({ upcoming, results, source, updatedAt, sourceUrl, sourceRange, sourceError, initialZone = "KST", resultFrom, resultTo, defaultResultFrom, defaultResultTo }: Props) {
+  const fallbackRange = defaultAuctionDateRange();
+  const initialFrom = resultFrom ?? fallbackRange.from;
+  const initialTo = resultTo ?? fallbackRange.to;
+  const resetFrom = defaultResultFrom ?? fallbackRange.from;
+  const resetTo = defaultResultTo ?? fallbackRange.to;
   const [view, setView] = useState<View>("market");
   const [tab, setTab] = useState<Tab>("results");
   const [zone, setZone] = useState<DisplayZone>(initialZone);
   const [filter, setFilter] = useState<AuctionFilterId>("all");
   const [selectedKey, setSelectedKey] = useState("");
+  const [fromInput, setFromInput] = useState(initialFrom);
+  const [toInput, setToInput] = useState(initialTo);
+  const [rangeError, setRangeError] = useState("");
   const resultRef = useRef<HTMLElement>(null);
   const calendarRef = useRef<HTMLElement>(null);
   const planned = useMemo(() => scheduleRows(upcoming, updatedAt), [upcoming, updatedAt]);
-  const resultRows = useMemo(() => filterAuctionRows(results, filter), [results, filter]);
+  const resultRows = useMemo(() => filterResultRows(results, filter, initialFrom, initialTo), [results, filter, initialFrom, initialTo]);
   const calendarRows = useMemo(() => filterAuctionRows(planned, filter), [planned, filter]);
   const filtered = tab === "calendar" ? calendarRows : resultRows;
   const selectedRow = filtered.find(row => rowKey(row) === selectedKey) ?? filtered[0];
@@ -97,6 +113,27 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
   const changeFilter = (next: AuctionFilterId) => { setFilter(next); setSelectedKey(""); };
   const select = (row: TreasuryAuction, next: Tab) => { setView("market"); setTab(next); setSelectedKey(rowKey(row)); };
   const selectResult = (row: TreasuryAuction) => select(row, "results");
+  const navigateToRange = (from: string, to: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("from", from);
+    url.searchParams.set("to", to);
+    window.location.assign(url.toString());
+  };
+  const applyDateRange = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const error = validateAuctionDateRange(fromInput, toInput);
+    if (error) { setRangeError(error); return; }
+    setRangeError("");
+    setSelectedKey("");
+    navigateToRange(fromInput, toInput);
+  };
+  const resetDateRange = () => {
+    setFromInput(resetFrom);
+    setToInput(resetTo);
+    setRangeError("");
+    setSelectedKey("");
+    navigateToRange(resetFrom, resetTo);
+  };
 
   return <div className="terminal-shell" data-theme="dark">
     <header className="topbar">
@@ -145,7 +182,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
           <div className="quick-item"><i className="quick-icon pink" aria-hidden="true" /><div><small>다음 단기채 입찰</small><b>{nextBill ? securityName(nextBill) : "자료 없음"}</b></div></div>
           {nextBill && <p className="quick-date">{auctionDateTime(nextBill, zone).full}</p>}
           <div className="quick-item"><small>표시 예정 물량 합계</small><b>{money(planned.reduce((sum, row) => sum + (row.offeringAmount ?? 0), 0))}</b></div>
-          <div className="quick-item"><small>수신 결과</small><b>{results.length}건</b></div>
+          <div className="quick-item"><small>조회기간 표시 결과</small><b>{resultRows.length}건</b></div>
           <button className="calendar-btn" onClick={() => changeTab("calendar")}>예정 일정 보기 <span aria-hidden="true">→</span></button>
         </section>
       </aside>
@@ -175,6 +212,12 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
           <div className="auction-lists">
             <section className="panel results-panel" id="auction-results" ref={resultRef}>
               <div className="section-heading"><h2 className="panel-heading">최근 입찰 결과</h2><span>{zoneLabel(zone)} · 시각 없는 자료는 원문 ET</span></div>
+              <form className="date-range-form" onSubmit={applyDateRange} noValidate>
+                <label htmlFor="auction-result-from"><span>From</span><input id="auction-result-from" name="from" type="date" value={fromInput} onChange={event => setFromInput(event.target.value)} /></label>
+                <label htmlFor="auction-result-to"><span>To</span><input id="auction-result-to" name="to" type="date" value={toInput} onChange={event => setToInput(event.target.value)} /></label>
+                <div className="date-range-actions"><button type="submit" className="date-range-submit">조회</button><button type="button" className="date-range-reset" onClick={resetDateRange}>최근 2년</button></div>
+                {rangeError && <p className="date-range-error" role="alert">{rangeError}</p>}
+              </form>
               {/* 키보드로 긴 표를 스크롤할 수 있게 하는 포커스 영역입니다. */}
               {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
               <div className="table-wrap" tabIndex={0} role="region" aria-label="최근 입찰 결과표"><table>
@@ -188,8 +231,8 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
                     <td title={stopName(row)}>{percent(row.stopRate, 3)}</td><td className="subscription-cell">{subscription(row.bidToCover)}</td><td className={row.allottedAtHigh == null ? "unavailable" : ""}>{percent(row.allottedAtHigh)}</td>
                     <td>{percent(allocation?.[0])}</td><td>{percent(allocation?.[1])}</td><td>{percent(allocation?.[2])}</td><td>{price(row.pricePer100)}</td>
                   </tr>;
-                })}{!resultRows.length && <tr><td colSpan={10} className="empty-state">결과 없음 · 조건에 맞는 입찰 결과가 없습니다.</td></tr>}</tbody>
-              </table></div><div className="table-foot"><span>{resultRows.length}건 · 선택 시 주요 결과 갱신</span><span>금액 USD · $B = 십억 달러</span></div>
+                })}{!resultRows.length && <tr><td colSpan={10} className="empty-state">결과 없음 · {initialFrom} ~ {initialTo} 기간과 조건에 맞는 입찰 결과가 없습니다.</td></tr>}</tbody>
+              </table></div><div className="table-foot"><span>{initialFrom} ~ {initialTo} · {resultRows.length}건</span><span>금액 USD · $B = 십억 달러</span></div>
             </section>
             <section className="panel schedule-panel" id="auction-calendar" ref={calendarRef}>
               <div className="section-heading"><h2 className="panel-heading">예정 입찰 일정</h2><span>{source === "fiscal-api" ? "자료 기준 시각 이후 예정" : "공식 API 수신 실패"}</span></div>
