@@ -87,7 +87,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
   const calendarRef = useRef<HTMLElement>(null);
   const planned = useMemo(() => scheduleRows(upcoming, updatedAt), [upcoming, updatedAt]);
   const resultRows = useMemo(() => filterResultRows(results, filter, initialFrom, initialTo), [results, filter, initialFrom, initialTo]);
-  const calendarRows = useMemo(() => filterAuctionRows(planned, filter), [planned, filter]);
+  const calendarRows = planned;
   const filtered = tab === "calendar" ? calendarRows : resultRows;
   const selectedRow = filtered.find(row => rowKey(row) === selectedKey) ?? filtered[0];
   const selectedResult = tab === "results" ? selectedRow : priorResult(selectedRow, results);
@@ -199,7 +199,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
           <div className="section-heading"><h2 className="panel-heading underlined">주요 입찰 결과</h2><span>{tab === "calendar" ? "직전 비교 결과: " : "선택 결과: "}{securityName(selectedResult)}{selectedResult ? ` · ${auctionDateTime(selectedResult, zone).full}` : ""}</span></div>
           <div className="kpis">
             <article className="kpi subscription-kpi"><h3>응찰률 (%)</h3><strong className="kpi-value green-text">{subscription(selectedResult?.bidToCover)}</strong><div className="kpi-bottom"><div><small>직전 평균 · 유효 {validPrevious.length}/{historicalRows.length}건</small><b>{percent(avgSubscription)}</b></div><div><small>평균 대비</small><b>{signedPoints(subscriptionDelta)}</b></div></div></article>
-            <article className="kpi"><h3>{stopName(selectedResult)}</h3><strong className="kpi-value">{percent(selectedResult?.stopRate, 3)}</strong><div className="kpi-bottom"><div><small>When-Issued</small><b>N/A</b></div><div><small>Tail (bp)</small><b>N/A</b></div></div></article>
+            <article className="kpi stop-kpi"><h3>{stopName(selectedResult)}</h3><strong className="kpi-value">{percent(selectedResult?.stopRate, 3)}</strong></article>
             {["간접낙찰률", "직접낙찰률", "PD낙찰률"].map((label, index) => {
               const difference = percentagePointChange(mix?.[index], previousMix?.[index]);
               return <article className="kpi bidder-kpi" key={label}><h3>{label}</h3><strong className="kpi-value green-text">{percent(mix?.[index])}</strong><div className="kpi-bottom"><div><small>직전 입찰 대비</small><b className={difference == null ? "subtle" : difference > 0 ? "green-text" : difference < 0 ? "red-text" : ""}>{signedPoints(difference)}</b></div></div></article>;
@@ -209,12 +209,12 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
           <p className="comparison-note">낙찰률: 전체 낙찰액 대비 비중 · 증감: 동일 종류·만기의 직전 입찰 대비 %p{previous ? ` · 비교 입찰: ${auctionDateTime(previous, zone).full}` : " · 비교 자료 없음"}</p>
         </section>
         <section className="panel charts" aria-label="입찰 차트">
-          <article className="chart-cell"><h2 className="panel-heading">낙찰 금리</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {stopRows.length}건</p><AuctionLineChart rows={stopRows} kind="stop" onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch blue" />{stopName(selectedResult)}</span><span className="subtle">When-Issued 미연결</span></div></article>
+          <article className="chart-cell"><h2 className="panel-heading">낙찰 금리</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {stopRows.length}건</p><AuctionLineChart rows={stopRows} kind="stop" onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch blue" />{stopName(selectedResult)}</span></div></article>
           <article className="chart-cell"><h2 className="panel-heading">참여자별 낙찰 비중 (%)</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {comparisonRows.length}건 · 전체 낙찰액 기준</p><AllocationChart rows={comparisonRows} onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="swatch green" />간접</span><span><i className="swatch blue" />직접</span><span><i className="swatch purple" />PD</span><span><i className="swatch gray" />기타</span></div></article>
           <article className="chart-cell"><h2 className="panel-heading">응찰률 (%)</h2><p className="chart-subtitle">{securityName(selectedResult)} · 동일 종류·만기 {subscriptionRows.length}건 · 장기 기준과 최근 흐름</p><SubscriptionChart rows={subscriptionRows} onSelect={selectResult} zone={zone} /><div className="legend"><span><i className="legend-dot" />개별 입찰값</span><span><i className="legend-line baseline" />24개월 평균</span><span><i className="swatch sigma-band" />24개월 평균 ±1σ</span><span><i className="legend-line current" />최근 6회 평균</span></div></article>
         </section>
 
-        <div className="list-controls"><span>결과·예정 일정 종류</span><div className="filter-row" role="group" aria-label="국채 종류 및 명목 중·장기채 만기 필터">{auctionFilters.map(option => <button key={option.id} className={filter === option.id ? "selected" : ""} aria-pressed={filter === option.id} onClick={() => changeFilter(option.id)}>{option.label}</button>)}</div></div>
+        <div className="list-controls"><span>결과 입찰 종류</span><div className="filter-row" role="group" aria-label="국채 종류 및 명목 중·장기채 만기 필터">{auctionFilters.map(option => <button key={option.id} className={filter === option.id ? "selected" : ""} aria-pressed={filter === option.id} onClick={() => changeFilter(option.id)}>{option.label}</button>)}</div></div>
         <section className="bottom-row">
           <div className="auction-lists">
             <section className="panel results-panel" id="auction-results" ref={resultRef}>

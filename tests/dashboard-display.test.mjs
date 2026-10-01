@@ -114,10 +114,11 @@ test("필터는 명목 중·장기채를 만기별로 구분하고 FRN·TIPS를 
   assert.deepEqual(filterAuctionRows(rows, "note-5"), []);
 });
 
-test("결과·예정 표는 같은 필터 판별을 사용하고 필터 변경 시 선택을 초기화", async () => {
+test("결과 필터는 예정 표와 분리되고 필터 변경 시 선택을 초기화", async () => {
   const source = await readFile(new URL("../app/AuctionDashboard.tsx", import.meta.url), "utf8");
   assert.match(source, /filterResultRows\(results, filter, initialFrom, initialTo\)/);
-  assert.match(source, /filterAuctionRows\(planned, filter\)/);
+  assert.match(source, /const calendarRows = planned;/);
+  assert.doesNotMatch(source, /filterAuctionRows\(planned, filter\)/);
   assert.match(source, /const changeFilter = \(next: AuctionFilterId\) => \{[\s\S]*?setFilter\(next\);[\s\S]*?setSelectedKey\(""\);[\s\S]*?searchParams\.set\("filter", next\);[\s\S]*?history\.replaceState/);
   assert.match(source, /filtered\.find\(row => rowKey\(row\) === selectedKey\) \?\? filtered\[0\]/);
   assert.doesNotMatch(source, /setTab\(next\); setFilter\("all"\)/);
@@ -367,6 +368,25 @@ test("최근 결과와 향후 수신 일정이 기본 화면에 동시에 표시
   assert.match(html, /2026-08-26 02:00 · 한국 KST 10년 중기채 일정 선택/);
   assert.match(html, /예정 1건/);
   assert.match(html, /아직 공고되지 않은 계획은 포함하지 않습니다/);
+});
+
+test("결과 종류 필터와 관계없이 예정 일정은 전체 행을 유지", () => {
+  const upcoming = [
+    { ...base, cusip: "UPCOMING-NOTE", auctionDate: "2026-08-25" },
+    { ...base, cusip: "UPCOMING-BILL", auctionDate: "2026-08-26", type: "Bill", term: "13-Week", securityTerm: "13-Week" },
+  ];
+  const html = renderToStaticMarkup(React.createElement(Dashboard, { ...props, source: "fiscal-api", upcoming, initialFilter: "note-10" }));
+  const schedule = html.match(/aria-label="예정 입찰 일정표"[\s\S]*?<\/table>/)?.[0] ?? "";
+  assert.match(schedule, /UPCOMING-NOTE|10년 중기채/);
+  assert.match(schedule, /UPCOMING-BILL|13주 단기채/);
+  assert.match(html, /예정 2건/);
+  assert.match(html, /결과 입찰 종류/);
+});
+
+test("Stop KPI와 금리 차트에서 입수 불가능한 When-Issued와 Tail을 표시하지 않음", () => {
+  const html = renderToStaticMarkup(React.createElement(Dashboard, props));
+  assert.doesNotMatch(html, /When-Issued|Tail \(bp\)/);
+  assert.match(html, /class="kpi stop-kpi"/);
 });
 
 test("API 실패 시 표본 일정으로 대체하지 않음", () => {

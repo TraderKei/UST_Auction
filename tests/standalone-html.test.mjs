@@ -45,7 +45,7 @@ test("standalone offers nominal maturity filters without mixing FRN or TIPS", as
   assert.match(html, /\{id:`bond-30`,label:`30년`,type:`Bond`,term:`30-Year`\}/);
   assert.match(html, /e\.type===n\.type&&\(!n\.term\|\|e\.term===n\.term\|\|e\.securityTerm===n\.term\)/);
   assert.match(html, /t\.filter\(e=>ustMatchesAuctionFilter\(e,d\)&&e\.auctionDate>=ustFrom&&e\.auctionDate<=ustTo\)/);
-  assert.match(html, /_\.filter\(e=>ustMatchesAuctionFilter\(e,d\)\)/);
+  assert.match(html, /y=_,b=s===`calendar`\?y:v/);
   assert.match(html, /className:`filter-row`,role:`group`/);
   assert.match(html, /className:d===e\.id\?`selected`/);
   assert.match(html, /\.filter-row\{flex-wrap:wrap;min-width:0\}/);
@@ -127,6 +127,15 @@ test("standalone validates and preserves filter in URL, date actions, reload, an
   assert.match(html, /t\.searchParams\.set\(`filter`,e\),window\.history\.replaceState/);
   assert.match(html, /onClick:\(\)=>ustChangeFilter\(e\.id\)/);
   assert.doesNotMatch(html, /c\(e\),f\(`all`\),m\(``\)/);
+});
+
+test("standalone keeps the full calendar and removes unavailable WI and Tail UI", async () => {
+  const { html } = await sources();
+  assert.match(html, /y=_,b=s===`calendar`\?y:v/);
+  assert.doesNotMatch(html, /_\.filter\(e=>ustMatchesAuctionFilter\(e,d\)\)/);
+  assert.doesNotMatch(html, /When-Issued|Tail \(bp\)/);
+  assert.match(html, /className:`kpi stop-kpi`/);
+  assert.match(html, /children:`결과 입찰 종류`/);
 });
 
 test("standalone loader maps official result fields and has valid JavaScript", async () => {

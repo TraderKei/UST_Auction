@@ -56,6 +56,7 @@ h1, h2, h3, p, dl { margin: 0; } button { border: 0; }
 .key-results { padding-bottom: 12px; }.kpis { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 10px; padding: 0 12px; }
 .kpi { min-width: 0; min-height: 154px; padding: 14px 14px 13px; border: 1px solid #213344; border-radius: 7px; background: linear-gradient(135deg,#172737bd,#142230d9); }
 .kpi h3 { font-size: 12px; font-weight: 500; white-space: nowrap; }.kpi-value { display: block; font-size: clamp(23px,1.9vw,30px); line-height: 1.25; font-weight: 600; margin: 10px 0 19px; letter-spacing: -.015em; }
+.stop-kpi .kpi-value { margin-bottom: 0; }
 .green-text { color: var(--green); }.red-text { color: var(--red); }.unavailable { color: #92a4b5; }
 .kpi-bottom { display: flex; justify-content: space-between; gap: 8px; }.kpi-bottom>div { display: grid; gap: 6px; }.kpi-bottom>div+div { text-align: right; }.kpi-bottom small { font-size: 11px; color: var(--muted); }.kpi-bottom b { font-size: 12px; font-weight: 500; white-space: nowrap; }
 .charts { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 14px 0; }.chart-cell { min-width: 0; padding: 0 14px; }.chart-cell+.chart-cell { border-left: 1px solid var(--line); }.chart-subtitle { font-size: 10px; color: var(--muted); margin: 4px 0 6px; }
