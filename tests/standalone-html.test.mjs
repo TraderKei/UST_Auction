@@ -102,14 +102,31 @@ test("standalone defaults to two years and exposes an accessible URL-backed date
   assert.match(html, /className:`date-range-error`,role:`alert`/);
   assert.match(html, /e\.auctionDate>=ustFrom&&e\.auctionDate<=ustTo/);
   assert.match(html, /window\.location\.assign\(n\.toString\(\)\)/);
-  assert.match(html, /useEffect\)\(\(\)=>\{ustSetFromInput\(ustFrom\),ustSetToInput\(ustTo\)\}/);
+  assert.match(html, /useEffect\)\(\(\)=>\{ustSetFromInput\(ustFrom\),ustSetToInput\(ustTo\),f\(ustInitialFilter\(ustFilter\)\)\}/);
   assert.match(html, /ustFrom,` ~ `,ustTo,` · `,v\.length,`건`/);
+  assert.match(html, /className:`section-heading results-heading`/);
+  assert.doesNotMatch(html, /className:`section-heading`,children:\[\(0,A\.jsx\)\(`h2`,\{className:`panel-heading`,children:`최근 입찰 결과`\}\).*?className:`date-range-form`/);
+  assert.match(html, /\.results-heading \{[^}]*flex-wrap: nowrap/);
+  assert.match(html, /@media \(max-width: 600px\)[\s\S]*?\.date-range-form \{[^}]*flex-wrap: wrap/);
   assert.match(html, /@media \(max-width: 600px\)/);
   assert.match(loader, /const defaultRange = \(today\)/);
   assert.match(loader, /parameters\.get\("from"\)/);
   assert.match(loader, /parameters\.get\("to"\)/);
   assert.match(loader, /resultFrom: range\.from/);
   assert.match(loader, /defaultResultFrom: defaults\.from/);
+});
+
+test("standalone validates and preserves filter in URL, date actions, reload, and API failure", async () => {
+  const { html, loader } = await sources();
+  assert.match(loader, /FILTER_IDS = new Set\(\["all", "bill", "note-2"/);
+  assert.match(loader, /FILTER_IDS\.has\(candidate\) \? candidate : "all"/);
+  assert.equal((loader.match(/initialFilter,/g) ?? []).length, 2, "success and failure renders both preserve filter");
+  assert.match(html, /function ustInitialFilter\(e\)/);
+  assert.match(html, /Ee\.some\(e=>e\.id===t\)\?t:`all`/);
+  assert.match(html, /n\.searchParams\.set\(`filter`,d\),window\.location\.assign/);
+  assert.match(html, /t\.searchParams\.set\(`filter`,e\),window\.history\.replaceState/);
+  assert.match(html, /onClick:\(\)=>ustChangeFilter\(e\.id\)/);
+  assert.doesNotMatch(html, /c\(e\),f\(`all`\),m\(``\)/);
 });
 
 test("standalone loader maps official result fields and has valid JavaScript", async () => {

@@ -8,6 +8,7 @@ import { loadSource } from "./source-loader.mjs";
 const { subscriptionPercent, subscription, subscriptionRollingSeries, awardMix, priorResult, percentagePointChange, signedPoints } = loadSource("../lib/auction-display.ts");
 const { normalizeFiscalAuction } = loadSource("../lib/treasury.ts");
 const { defaultAuctionDateRange, filterAuctionsByDateRange, isIsoDate, resolveAuctionDateRange, shiftCalendarMonths, shiftCalendarYears, validateAuctionDateRange } = loadSource("../lib/auction-date-range.ts");
+const { AUCTION_FILTER_IDS, resolveAuctionFilter } = loadSource("../lib/auction-filter.ts");
 const dashboardModule = loadSource("../app/AuctionDashboard.tsx");
 const Dashboard = dashboardModule.default;
 const { auctionFilters, matchesAuctionFilter, filterAuctionRows, filterResultRows } = dashboardModule;
@@ -44,6 +45,16 @@ test("URL 조회기간은 엄격히 검증하고 잘못된 값은 최근 2년으
   ]) assert.deepEqual(resolveAuctionDateRange(parameters, today), { from: "2024-09-30", to: "2026-09-30" });
   assert.equal(validateAuctionDateRange("", "2026-09-30"), "시작일과 종료일을 모두 입력해 주세요.");
   assert.equal(validateAuctionDateRange("2026-10-01", "2026-09-30"), "시작일은 종료일보다 늦을 수 없습니다.");
+});
+
+test("URL 만기 필터는 허용 목록만 복원하고 날짜 복구와 독립적으로 유지", () => {
+  assert.deepEqual(AUCTION_FILTER_IDS, ["all", "bill", "note-2", "note-3", "note-5", "note-7", "note-10", "bond-20", "bond-30", "tips", "frn"]);
+  assert.equal(resolveAuctionFilter("note-10"), "note-10");
+  assert.equal(resolveAuctionFilter(["bond-20", "all"]), "bond-20");
+  assert.equal(resolveAuctionFilter("not-a-filter"), "all");
+  assert.equal(resolveAuctionFilter(undefined), "all");
+  assert.deepEqual(resolveAuctionDateRange({ from: "bad", to: "2026-09-30" }, new Date("2026-09-30T12:00:00Z")), { from: "2024-09-30", to: "2026-09-30" });
+  assert.equal(resolveAuctionFilter("note-10"), "note-10");
 });
 
 test("결과 날짜 범위는 양쪽 경계를 포함하고 종류 필터와 AND로 결합", () => {
@@ -107,8 +118,9 @@ test("결과·예정 표는 같은 필터 판별을 사용하고 필터 변경 �
   const source = await readFile(new URL("../app/AuctionDashboard.tsx", import.meta.url), "utf8");
   assert.match(source, /filterResultRows\(results, filter, initialFrom, initialTo\)/);
   assert.match(source, /filterAuctionRows\(planned, filter\)/);
-  assert.match(source, /changeFilter = \(next: AuctionFilterId\) => \{ setFilter\(next\); setSelectedKey\(""\); \}/);
+  assert.match(source, /const changeFilter = \(next: AuctionFilterId\) => \{[\s\S]*?setFilter\(next\);[\s\S]*?setSelectedKey\(""\);[\s\S]*?searchParams\.set\("filter", next\);[\s\S]*?history\.replaceState/);
   assert.match(source, /filtered\.find\(row => rowKey\(row\) === selectedKey\) \?\? filtered\[0\]/);
+  assert.doesNotMatch(source, /setTab\(next\); setFilter\("all"\)/);
 
   const html = renderToStaticMarkup(React.createElement(Dashboard, props));
   assert.match(html, /role="group" aria-label="국채 종류 및 명목 중·장기채 만기 필터"/);
@@ -125,12 +137,31 @@ test("결과 기간 UI는 접근 가능한 두 캘린더·조회·초기화와 �
   assert.match(html, /<input id="auction-result-to"[^>]*type="date"[^>]*value="2026-08-21"/);
   assert.match(html, />조회<\/button><button type="button" class="date-range-reset">최근 2년<\/button>/);
   assert.match(html, /2024-08-21 ~ 2026-08-21 · 1건/);
+  assert.match(html, /<div class="section-heading results-heading"><h2 class="panel-heading">최근 입찰 결과<\/h2><form class="date-range-form"/);
+  assert.doesNotMatch(html, /최근 입찰 결과<\/h2><\/div><form class="date-range-form"/);
 
   const source = await readFile(new URL("../app/AuctionDashboard.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(source, /url\.searchParams\.set\("from", from\)/);
   assert.match(source, /url\.searchParams\.set\("to", to\)/);
+  assert.match(source, /url\.searchParams\.set\("filter", filter\)/);
   assert.match(source, /window\.location\.assign\(url\.toString\(\)\)/);
   assert.match(source, /role="alert"/);
+  assert.match(css, /\.results-heading \{[^}]*flex-wrap: nowrap/);
+  assert.match(css, /\.date-range-form \{[^}]*flex-wrap: nowrap/);
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.date-range-form \{[^}]*flex-wrap: wrap/);
+});
+
+test("URL에서 복원한 note-10은 날짜 범위와 AND로 적용되고 0건이면 KPI가 남지 않음", () => {
+  const note2 = { ...base, cusip: "NOTE2", auctionDate: "2026-08-21", term: "2-Year", securityTerm: "2-Year" };
+  const filteredHtml = renderToStaticMarkup(React.createElement(Dashboard, { ...props, results: [note2, base], initialFilter: "note-10" }));
+  assert.match(filteredHtml, /class="selected" aria-pressed="true">10년<\/button>/);
+  assert.match(filteredHtml, /2024-08-21 ~ 2026-08-21 · 1건/);
+  assert.doesNotMatch(filteredHtml, /NOTE2/);
+
+  const emptyHtml = renderToStaticMarkup(React.createElement(Dashboard, { ...props, results: [note2], initialFilter: "note-10" }));
+  assert.match(emptyHtml, /결과 없음/);
+  assert.match(visibleText(emptyHtml), /응찰률 \(%\) N\/A/);
 });
 
 test("0건 결과는 적용 기간을 표시하고 예정 일정에는 날짜 필터를 적용하지 않음", () => {
@@ -145,7 +176,10 @@ test("0건 결과는 적용 기간을 표시하고 예정 일정에는 날짜 �
 test("페이지는 URL 기간을 서버 조회에 전달하고 API는 롤링 워밍업과 고정 예정 범위를 사용", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const treasury = await readFile(new URL("../lib/treasury.ts", import.meta.url), "utf8");
-  assert.match(page, /resolveAuctionDateRange\(await searchParams, today\)/);
+  assert.match(page, /const parameters = await searchParams/);
+  assert.match(page, /resolveAuctionDateRange\(parameters, today\)/);
+  assert.match(page, /resolveAuctionFilter\(parameters\?\.filter\)/);
+  assert.match(page, /initialFilter=\{initialFilter\}/);
   assert.match(page, /getTreasuryData\(resultRange\)/);
   assert.match(treasury, /shiftCalendarMonths\(visibleRange\.from, -25\)/);
   assert.match(treasury, /row\.auctionDate <= upcomingTo/);

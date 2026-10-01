@@ -2,6 +2,7 @@
   "use strict";
 
   const API = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/auctions_query";
+  const FILTER_IDS = new Set(["all", "bill", "note-2", "note-3", "note-5", "note-7", "note-10", "bond-20", "bond-30", "tips", "frn"]);
   const FIELDS = [
     "record_date", "cusip", "security_type", "security_term", "original_security_term",
     "inflation_index_security", "floating_rate", "announcemt_date", "auction_date",
@@ -53,6 +54,10 @@
     const from = parameters.get("from");
     const to = parameters.get("to");
     return dateParts(from || "") && dateParts(to || "") && from <= to ? { from, to } : defaults;
+  };
+  const selectedFilter = () => {
+    const candidate = new URL(window.location.href).searchParams.get("filter");
+    return FILTER_IDS.has(candidate) ? candidate : "all";
   };
   const addUtcDays = (value, days) => {
     const copy = new Date(value);
@@ -190,6 +195,7 @@
     today.setUTCHours(0, 0, 0, 0);
     const defaults = defaultRange(today);
     const range = selectedRange(today);
+    const initialFilter = selectedFilter();
     const upcomingTo = isoDate(addUtcDays(today, 90));
     // 표시 시작일 이전 24개월 롤링 기준선과 직전 관측치를 함께 확보합니다.
     const from = shiftCalendarMonths(range.from, -25);
@@ -217,6 +223,7 @@
         resultTo: range.to,
         defaultResultFrom: defaults.from,
         defaultResultTo: defaults.to,
+        initialFilter,
       });
       const message = `미국 재무부 Fiscal Data 공식 API 자료입니다. 조회 범위 ${from}~${to}, 결과 ${results.length}건, 예정 ${upcoming.length}건.`;
       requestAnimationFrame(() => keepStatusVisible("live", "공식 API 수신", message));
@@ -230,6 +237,7 @@
         resultTo: range.to,
         defaultResultFrom: defaults.from,
         defaultResultTo: defaults.to,
+        initialFilter,
       });
       const reason = error instanceof Error ? error.message : String(error);
       requestAnimationFrame(() => keepStatusVisible(

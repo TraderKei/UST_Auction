@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { TreasuryAuction } from "../lib/treasury";
 import { defaultAuctionDateRange, filterAuctionsByDateRange, validateAuctionDateRange } from "../lib/auction-date-range";
+import { resolveAuctionFilter, type AuctionFilterId } from "../lib/auction-filter";
 import { average, awardMix, percent, percentagePointChange, priorResult, securityName, signedPoints, stopName, subscription, subscriptionPercent } from "../lib/auction-display";
 import { auctionDateTime, dateOnly, displayInstant, scheduleRows, zoneLabel, type DisplayZone } from "../lib/auction-time";
 import { AllocationChart, AuctionLineChart, SubscriptionChart } from "./AuctionCharts";
@@ -17,6 +18,7 @@ type Props = {
   sourceRange?: string;
   sourceError?: string;
   initialZone?: DisplayZone;
+  initialFilter?: AuctionFilterId;
   resultFrom?: string;
   resultTo?: string;
   defaultResultFrom?: string;
@@ -46,8 +48,6 @@ export const auctionFilters = [
   { id: "tips", label: "물가연동채", type: "TIPS" },
   { id: "frn", label: "변동금리채", type: "FRN" },
 ] as const satisfies readonly AuctionFilterDefinition[];
-export type AuctionFilterId = typeof auctionFilters[number]["id"];
-
 export function matchesAuctionFilter(row: TreasuryAuction, filterId: AuctionFilterId): boolean {
   const definition: AuctionFilterDefinition | undefined = auctionFilters.find(filter => filter.id === filterId);
   if (!definition) return false;
@@ -69,7 +69,7 @@ function CalendarDate({ value }: { value: string | undefined }) {
   return <span className="date-cell"><span>{dateOnly(value)}</span><small>원문 ET · 시각 없음</small></span>;
 }
 
-export default function AuctionDashboard({ upcoming, results, source, updatedAt, sourceUrl, sourceRange, sourceError, initialZone = "KST", resultFrom, resultTo, defaultResultFrom, defaultResultTo }: Props) {
+export default function AuctionDashboard({ upcoming, results, source, updatedAt, sourceUrl, sourceRange, sourceError, initialZone = "KST", initialFilter = "all", resultFrom, resultTo, defaultResultFrom, defaultResultTo }: Props) {
   const fallbackRange = defaultAuctionDateRange();
   const initialFrom = resultFrom ?? fallbackRange.from;
   const initialTo = resultTo ?? fallbackRange.to;
@@ -78,7 +78,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
   const [view, setView] = useState<View>("market");
   const [tab, setTab] = useState<Tab>("results");
   const [zone, setZone] = useState<DisplayZone>(initialZone);
-  const [filter, setFilter] = useState<AuctionFilterId>("all");
+  const [filter, setFilter] = useState<AuctionFilterId>(() => resolveAuctionFilter(initialFilter));
   const [selectedKey, setSelectedKey] = useState("");
   const [fromInput, setFromInput] = useState(initialFrom);
   const [toInput, setToInput] = useState(initialTo);
@@ -107,16 +107,23 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
   const stamp = displayInstant(updatedAt, zone);
   const selectedTime = auctionDateTime(selectedRow, zone);
   const changeTab = (next: Tab) => {
-    setView("market"); setTab(next); setFilter("all"); setSelectedKey("");
+    setView("market"); setTab(next); setSelectedKey("");
     (next === "calendar" ? calendarRef : resultRef).current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-  const changeFilter = (next: AuctionFilterId) => { setFilter(next); setSelectedKey(""); };
+  const changeFilter = (next: AuctionFilterId) => {
+    setFilter(next);
+    setSelectedKey("");
+    const url = new URL(window.location.href);
+    url.searchParams.set("filter", next);
+    window.history.replaceState(window.history.state, "", url.toString());
+  };
   const select = (row: TreasuryAuction, next: Tab) => { setView("market"); setTab(next); setSelectedKey(rowKey(row)); };
   const selectResult = (row: TreasuryAuction) => select(row, "results");
   const navigateToRange = (from: string, to: string) => {
     const url = new URL(window.location.href);
     url.searchParams.set("from", from);
     url.searchParams.set("to", to);
+    url.searchParams.set("filter", filter);
     window.location.assign(url.toString());
   };
   const applyDateRange = (event: React.FormEvent<HTMLFormElement>) => {
@@ -137,7 +144,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
 
   return <div className="terminal-shell" data-theme="dark">
     <header className="topbar">
-      <button className="brand" onClick={() => { setView("market"); setTab("results"); setFilter("all"); setSelectedKey(""); }} aria-label="UST AUCTION 처음으로"><span className="bank" aria-hidden="true" /><span>UST AUCTION</span></button>
+      <button className="brand" onClick={() => { setView("market"); setTab("results"); setSelectedKey(""); }} aria-label="UST AUCTION 처음으로"><span className="bank" aria-hidden="true" /><span>UST AUCTION</span></button>
       <nav className="nav" aria-label="주요 메뉴">
         <button className={view === "market" && tab === "calendar" ? "active" : ""} aria-pressed={view === "market" && tab === "calendar"} onClick={() => changeTab("calendar")}>입찰 일정</button>
         <button className={view === "market" && tab === "results" ? "active" : ""} aria-pressed={view === "market" && tab === "results"} onClick={() => changeTab("results")}>입찰 결과</button>
@@ -211,13 +218,15 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
         <section className="bottom-row">
           <div className="auction-lists">
             <section className="panel results-panel" id="auction-results" ref={resultRef}>
-              <div className="section-heading"><h2 className="panel-heading">최근 입찰 결과</h2><span>{zoneLabel(zone)} · 시각 없는 자료는 원문 ET</span></div>
-              <form className="date-range-form" onSubmit={applyDateRange} noValidate>
-                <label htmlFor="auction-result-from"><span>From</span><input id="auction-result-from" name="from" type="date" value={fromInput} onChange={event => setFromInput(event.target.value)} /></label>
-                <label htmlFor="auction-result-to"><span>To</span><input id="auction-result-to" name="to" type="date" value={toInput} onChange={event => setToInput(event.target.value)} /></label>
-                <div className="date-range-actions"><button type="submit" className="date-range-submit">조회</button><button type="button" className="date-range-reset" onClick={resetDateRange}>최근 2년</button></div>
-                {rangeError && <p className="date-range-error" role="alert">{rangeError}</p>}
-              </form>
+              <div className="section-heading results-heading">
+                <h2 className="panel-heading">최근 입찰 결과</h2>
+                <form className="date-range-form" onSubmit={applyDateRange} noValidate>
+                  <label htmlFor="auction-result-from"><span>From</span><input id="auction-result-from" name="from" type="date" value={fromInput} onChange={event => setFromInput(event.target.value)} /></label>
+                  <label htmlFor="auction-result-to"><span>To</span><input id="auction-result-to" name="to" type="date" value={toInput} onChange={event => setToInput(event.target.value)} /></label>
+                  <div className="date-range-actions"><button type="submit" className="date-range-submit">조회</button><button type="button" className="date-range-reset" onClick={resetDateRange}>최근 2년</button></div>
+                  {rangeError && <p className="date-range-error" role="alert">{rangeError}</p>}
+                </form>
+              </div>
               {/* 키보드로 긴 표를 스크롤할 수 있게 하는 포커스 영역입니다. */}
               {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
               <div className="table-wrap" tabIndex={0} role="region" aria-label="최근 입찰 결과표"><table>
@@ -232,7 +241,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
                     <td>{percent(allocation?.[0])}</td><td>{percent(allocation?.[1])}</td><td>{percent(allocation?.[2])}</td><td>{price(row.pricePer100)}</td>
                   </tr>;
                 })}{!resultRows.length && <tr><td colSpan={10} className="empty-state">결과 없음 · {initialFrom} ~ {initialTo} 기간과 조건에 맞는 입찰 결과가 없습니다.</td></tr>}</tbody>
-              </table></div><div className="table-foot"><span>{initialFrom} ~ {initialTo} · {resultRows.length}건</span><span>금액 USD · $B = 십억 달러</span></div>
+              </table></div><div className="table-foot"><span>{initialFrom} ~ {initialTo} · {resultRows.length}건</span><span>{zoneLabel(zone)} · 시각 없는 자료는 원문 ET · 금액 USD · $B = 십억 달러</span></div>
             </section>
             <section className="panel schedule-panel" id="auction-calendar" ref={calendarRef}>
               <div className="section-heading"><h2 className="panel-heading">예정 입찰 일정</h2><span>{source === "fiscal-api" ? "자료 기준 시각 이후 예정" : "공식 API 수신 실패"}</span></div>
