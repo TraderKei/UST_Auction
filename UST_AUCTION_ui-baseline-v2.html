@@ -1028,31 +1028,37 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
 </style>
 <script src="./standalone-live-data.js"></script>
 <style id="auction-month-calendar-styles">
+  @media (width > 900px) {
+    .dashboard { grid-template-columns: 360px minmax(0, 1fr); }
+  }
+  @media (width >= 1500px) {
+    .dashboard { grid-template-columns: 390px minmax(0, 1fr); }
+  }
   .quick > :not(.auction-month-calendar) { display: none !important; }
   .auction-month-calendar { display: grid; gap: 10px; }
   .auction-calendar-head { display: flex; align-items: center; justify-content: space-between; gap: 7px; }
-  .auction-calendar-head .panel-heading { flex: 1 1 auto; }
+  .auction-calendar-head .panel-heading { flex: 1 1 auto; white-space: nowrap; }
   .auction-calendar-nav { display: flex; align-items: center; gap: 4px; }
   .auction-calendar-nav button,
-  .auction-calendar-nav select { height: 27px; border: 1px solid #345068; border-radius: 4px; background: #071724; color: #dce8f5; font-size: 10px; }
-  .auction-calendar-nav button { width: 27px; padding: 0; color: #aac5e4; }
+  .auction-calendar-nav select { height: 32px; border: 1px solid #345068; border-radius: 4px; background: #071724; color: #dce8f5; font-size: 11px; }
+  .auction-calendar-nav button { width: 34px; padding: 0; color: #c4daf2; font-size: 21px; line-height: 1; }
   .auction-calendar-nav button:hover:not(:disabled) { background: #17354e; color: #fff; }
   .auction-calendar-nav button:disabled { cursor: default; opacity: .35; }
-  .auction-calendar-nav select { padding: 0 4px; }
-  .auction-calendar-nav .calendar-year { width: 57px; }
-  .auction-calendar-nav .calendar-month { width: 44px; }
+  .auction-calendar-nav select { padding: 0 7px; }
+  .auction-calendar-nav .calendar-year { width: 72px; }
+  .auction-calendar-nav .calendar-month { width: 56px; }
   .auction-calendar-summary { color: var(--muted); font-size: 10px; line-height: 1.5; }
   .auction-calendar-weekdays,
   .auction-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
   .auction-calendar-weekdays span { color: #8397aa; text-align: center; font-size: 9px; }
   .auction-calendar-weekdays span:first-child { color: #df8290; }
   .auction-calendar-weekdays span:last-child { color: #7fa7e6; }
-  .auction-calendar-day { min-width: 0; min-height: 44px; padding: 4px 2px 3px; border: 1px solid #21384b; border-radius: 4px; background: #0a1a28; }
+  .auction-calendar-day { min-width: 0; min-height: 50px; padding: 5px 3px 4px; border: 1px solid #21384b; border-radius: 4px; background: #0a1a28; }
   .auction-calendar-day.is-empty { border-color: transparent; background: transparent; }
   .auction-calendar-day-number { display: block; margin: 0 1px 3px; color: #aebaca; font-size: 9px; line-height: 1; }
   .auction-calendar-day.has-events { background: #102537; }
   .auction-calendar-events { display: grid; gap: 2px; }
-  .auction-calendar-event { width: 100%; min-width: 0; padding: 2px 1px; overflow: hidden; border: 1px solid #355f8c; border-radius: 3px; color: #dcecff; background: #183d62; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; line-height: 1.2; }
+  .auction-calendar-event { width: 100%; min-width: 0; padding: 3px 2px; overflow: hidden; border: 1px solid #355f8c; border-radius: 3px; color: #dcecff; background: #183d62; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; line-height: 1.2; }
   .auction-calendar-event:hover,
   .auction-calendar-event.is-selected { border-color: #8fb6ff; background: #245c91; }
   .auction-calendar-event.is-upcoming { border-color: #765f2f; color: #f0d38a; background: #493b1e; }
@@ -1073,7 +1079,9 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
     const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
     const monthNames = Array.from({ length: 12 }, (_, index) => `${index + 1}월`);
 
-    const auctionKey = (auction, status) => `${status}|${auction.auctionDate}|${auction.cusip || ""}|${auction.type || ""}|${auction.term || ""}`;
+    const auctionIdentity = (auction) => `${auction.auctionDate}|${auction.type || ""}|${auction.term || ""}`;
+    const auctionRecordIdentity = (auction) => `${auctionIdentity(auction)}|${auction.cusip || ""}`;
+    const auctionKey = (auction, status) => `${status}|${auctionRecordIdentity(auction)}`;
     const monthIndex = (year, month) => year * 12 + month - 1;
     const monthFromIndex = (value) => ({ year: Math.floor(value / 12), month: value - Math.floor(value / 12) * 12 + 1 });
     const koreanTerm = (auction) => {
@@ -1102,7 +1110,11 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
         .map((auction) => ({ auction, status: "result" }));
       const upcoming = (data.upcoming || []).map((auction) => ({ auction, status: "upcoming" }));
       const unique = new Map();
-      [...results, ...upcoming].forEach((event) => unique.set(auctionKey(event.auction, event.status), event));
+      [...upcoming, ...results].forEach((event) => {
+        const key = auctionIdentity(event.auction);
+        const existing = unique.get(key);
+        if (!existing || existing.status === "upcoming" && event.status === "result") unique.set(key, event);
+      });
       return [...unique.values()].sort((left, right) => left.auction.auctionDate.localeCompare(right.auction.auctionDate) || koreanTerm(left.auction).localeCompare(koreanTerm(right.auction), "ko"));
     }
 
@@ -1111,10 +1123,21 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
       const run = () => {
         const label = koreanTerm(event.auction);
         const rows = document.querySelectorAll(`#${sectionId} tbody tr`);
-        const row = [...rows].find((candidate) => {
-          const cells = candidate.querySelectorAll("td");
-          return cells.length > 1 && cells[0].textContent.includes(event.auction.auctionDate) && cells[1].textContent.includes(label);
-        });
+        let row;
+        if (event.status === "result") {
+          const data = window.__UST_AUCTION_DATA__ || {};
+          const from = data.resultFrom || "0000-01-01";
+          const to = data.resultTo || "9999-12-31";
+          const visibleResults = (data.results || []).filter((auction) => auction.auctionDate >= from && auction.auctionDate <= to);
+          const resultIndex = visibleResults.findIndex((auction) => auctionRecordIdentity(auction) === auctionRecordIdentity(event.auction));
+          row = resultIndex >= 0 ? rows[resultIndex] : null;
+        } else {
+          row = [...rows].find((candidate) => {
+            const cells = candidate.querySelectorAll("td");
+            return cells.length > 1 && cells[1].textContent.includes(label) && candidate.querySelector("button.row-select")?.getAttribute("aria-label")?.includes(event.auction.cusip || event.auction.auctionDate);
+          });
+          if (!row) row = [...rows].find((candidate) => candidate.querySelectorAll("td")[1]?.textContent.includes(label));
+        }
         const button = row?.querySelector("button.row-select");
         if (!button) {
           message.textContent = "선택한 입찰을 현재 결과표에서 찾지 못했습니다.";
