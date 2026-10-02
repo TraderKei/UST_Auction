@@ -1028,6 +1028,8 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
 </style>
 <script src="./standalone-live-data.js"></script>
 <style id="auction-month-calendar-styles">
+  .key-results > .section-heading { justify-content: flex-start; flex-wrap: wrap; column-gap: 12px; }
+  .key-results > .section-heading > span { min-width: 0; }
   @media (width > 900px) {
     .dashboard { grid-template-columns: 360px minmax(0, 1fr); }
   }
@@ -1075,15 +1077,69 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
   (() => {
     "use strict";
 
-    const state = { data: null, year: null, month: null, selectedKey: "" };
+    const state = { data: null, zone: null, year: null, month: null, selectedKey: "" };
     const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
     const monthNames = Array.from({ length: 12 }, (_, index) => `${index + 1}월`);
+    const zoneNames = { KST: "한국 KST", ET: "미국 동부 ET" };
+    const zoneFormatters = Object.fromEntries(Object.entries({ KST: "Asia/Seoul", ET: "America/New_York" }).map(([zone, timeZone]) => [
+      zone,
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+      }),
+    ]));
 
     const auctionIdentity = (auction) => `${auction.auctionDate}|${auction.type || ""}|${auction.term || ""}`;
     const auctionRecordIdentity = (auction) => `${auctionIdentity(auction)}|${auction.cusip || ""}`;
     const auctionKey = (auction, status) => `${status}|${auctionRecordIdentity(auction)}`;
     const monthIndex = (year, month) => year * 12 + month - 1;
     const monthFromIndex = (value) => ({ year: Math.floor(value / 12), month: value - Math.floor(value / 12) * 12 + 1 });
+    const selectedZone = () => [...document.querySelectorAll(".zone-switch button")]
+      .find((button) => button.getAttribute("aria-pressed") === "true")?.textContent.includes("KST") ? "KST" : "ET";
+    const formatParts = (date, zone) => Object.fromEntries(zoneFormatters[zone].formatToParts(date).map((part) => [part.type, part.value]));
+    const validAuctionDate = (value) => {
+      const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})(?:$|T)/);
+      if (!match) return null;
+      const date = new Date(`${match[1]}T00:00:00Z`);
+      return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === match[1] ? match[1] : null;
+    };
+    const auctionInstant = (auction) => {
+      const auctionDate = validAuctionDate(auction?.auctionDate);
+      const match = auction?.closingTimeCompetitive?.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?(?:\s+(?:ET|EST|EDT))?$/i);
+      if (!auctionDate || !match) return null;
+      let hour = Number(match[1]);
+      const minute = Number(match[2]);
+      const second = Number(match[3] || 0);
+      if (minute > 59 || second > 59 || (match[4] ? hour < 1 || hour > 12 : hour > 23)) return null;
+      if (match[4]) hour = hour % 12 + (match[4].toUpperCase() === "PM" ? 12 : 0);
+      const [year, month, day] = auctionDate.split("-").map(Number);
+      const wallTime = Date.UTC(year, month - 1, day, hour, minute, second);
+      const asEtWallTime = (instant) => {
+        const parts = formatParts(new Date(instant), "ET");
+        return Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second));
+      };
+      let instant = wallTime;
+      for (let attempt = 0; attempt < 4; attempt += 1) instant += wallTime - asEtWallTime(instant);
+      if (asEtWallTime(instant) !== wallTime || asEtWallTime(instant - 3600000) === wallTime || asEtWallTime(instant + 3600000) === wallTime) return null;
+      return new Date(instant);
+    };
+    const displayAuction = (auction, zone) => {
+      const instant = auctionInstant(auction);
+      if (instant) {
+        const parts = formatParts(instant, zone);
+        const date = `${parts.year}-${parts.month}-${parts.day}`;
+        const time = `${parts.hour}:${parts.minute}`;
+        return { date, time, basis: zoneNames[zone], full: `${date} ${time} · ${zoneNames[zone]}`, converted: true };
+      }
+      const date = validAuctionDate(auction?.auctionDate) || "N/A";
+      return { date, time: "N/A", basis: "원문 ET · 시각 없음/확인 불가", full: `${date} · 원문 ET · 시각 없음/확인 불가`, converted: false };
+    };
     const koreanTerm = (auction) => {
       const amount = String(auction.term || auction.securityTerm || "").match(/\d+/)?.[0] || "";
       if (auction.type === "TIPS") return `${amount}년 물가연동채`;
@@ -1101,7 +1157,7 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
       return `${amount}Y`;
     };
 
-    function getEvents(data) {
+    function getEvents(data, zone) {
       if (!data) return [];
       const from = data.resultFrom || "0000-01-01";
       const to = data.resultTo || "9999-12-31";
@@ -1115,7 +1171,9 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
         const existing = unique.get(key);
         if (!existing || existing.status === "upcoming" && event.status === "result") unique.set(key, event);
       });
-      return [...unique.values()].sort((left, right) => left.auction.auctionDate.localeCompare(right.auction.auctionDate) || koreanTerm(left.auction).localeCompare(koreanTerm(right.auction), "ko"));
+      return [...unique.values()]
+        .map((event) => ({ ...event, display: displayAuction(event.auction, zone) }))
+        .sort((left, right) => left.display.date.localeCompare(right.display.date) || left.display.time.localeCompare(right.display.time) || koreanTerm(left.auction).localeCompare(koreanTerm(right.auction), "ko"));
     }
 
     function findAndSelect(event, message) {
@@ -1145,7 +1203,7 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
         }
         button.click();
         state.selectedKey = auctionKey(event.auction, event.status);
-        message.textContent = `${event.auction.auctionDate} · ${label} ${event.status === "result" ? "결과" : "예정"}을 선택했습니다.`;
+        message.textContent = `${event.display.full} · ${label} ${event.status === "result" ? "결과" : "예정"}을 선택했습니다.`;
         render();
       };
 
@@ -1164,12 +1222,14 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
       const host = document.querySelector(".left-rail .quick");
       const data = window.__UST_AUCTION_DATA__;
       if (!host || !data) return;
-      const events = getEvents(data);
+      const zone = selectedZone();
+      const events = getEvents(data, zone);
       if (state.data !== data) {
         state.data = data;
-        const latest = events.at(-1)?.auction.auctionDate.slice(0, 7);
+        const latest = events.at(-1)?.display.date.slice(0, 7);
         if (latest) [state.year, state.month] = latest.split("-").map(Number);
       }
+      state.zone = zone;
 
       let calendar = host.querySelector(".auction-month-calendar");
       if (!calendar) {
@@ -1179,11 +1239,11 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
       }
       calendar.replaceChildren();
 
-      const datedEvents = events.filter((event) => event.auction.auctionDate.startsWith(`${state.year}-${String(state.month).padStart(2, "0")}`));
+      const datedEvents = events.filter((event) => event.display.date.startsWith(`${state.year}-${String(state.month).padStart(2, "0")}`));
       const resultCount = datedEvents.filter((event) => event.status === "result").length;
       const upcomingCount = datedEvents.length - resultCount;
       const availableIndexes = events.map((event) => {
-        const [year, month] = event.auction.auctionDate.split("-").map(Number);
+        const [year, month] = event.display.date.split("-").map(Number);
         return monthIndex(year, month);
       });
       const minIndex = availableIndexes.length ? Math.min(...availableIndexes) : monthIndex(state.year, state.month);
@@ -1252,7 +1312,7 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
 
       const summary = document.createElement("p");
       summary.className = "auction-calendar-summary";
-      summary.textContent = `${state.year}년 ${state.month}월 · 결과 ${resultCount}건 · 예정 ${upcomingCount}건`;
+      summary.textContent = `${state.year}년 ${state.month}월 · ${zoneNames[zone]} 기준 · 결과 ${resultCount}건 · 예정 ${upcomingCount}건`;
       const weekdayRow = document.createElement("div");
       weekdayRow.className = "auction-calendar-weekdays";
       weekdays.forEach((weekday) => {
@@ -1263,7 +1323,7 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
       const grid = document.createElement("div");
       grid.className = "auction-calendar-grid";
       grid.setAttribute("role", "grid");
-      grid.setAttribute("aria-label", `${state.year}년 ${state.month}월 미국 국채 입찰 일정`);
+      grid.setAttribute("aria-label", `${state.year}년 ${state.month}월 ${zoneNames[zone]} 기준 미국 국채 입찰 일정`);
       const firstWeekday = new Date(Date.UTC(state.year, state.month - 1, 1)).getUTCDay();
       const lastDay = new Date(Date.UTC(state.year, state.month, 0)).getUTCDate();
       for (let index = 0; index < firstWeekday; index += 1) {
@@ -1274,7 +1334,7 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
       }
       for (let day = 1; day <= lastDay; day += 1) {
         const date = `${state.year}-${String(state.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const dayEvents = datedEvents.filter((event) => event.auction.auctionDate === date);
+        const dayEvents = datedEvents.filter((event) => event.display.date === date);
         const cell = document.createElement("div");
         cell.className = `auction-calendar-day${dayEvents.length ? " has-events" : ""}`;
         cell.setAttribute("role", "gridcell");
@@ -1290,7 +1350,7 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
             button.type = "button";
             button.className = `auction-calendar-event${event.status === "upcoming" ? " is-upcoming" : ""}${state.selectedKey === auctionKey(event.auction, event.status) ? " is-selected" : ""}`;
             button.textContent = shortTerm(event.auction);
-            button.title = `${date} · ${koreanTerm(event.auction)} · ${event.status === "result" ? "입찰 결과" : "예정 입찰"}`;
+            button.title = `${event.display.full} · ${koreanTerm(event.auction)} · ${event.status === "result" ? "입찰 결과" : "예정 입찰"}`;
             button.setAttribute("aria-label", button.title);
             button.addEventListener("click", () => findAndSelect(event, calendar.querySelector(".auction-calendar-message")));
             stack.appendChild(button);
@@ -1322,6 +1382,9 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
 
     function init() {
       render();
+      document.addEventListener("click", (event) => {
+        if (event.target.closest?.(".zone-switch button")) requestAnimationFrame(() => requestAnimationFrame(render));
+      });
       const root = document.getElementById("root");
       if (root) new MutationObserver(() => {
         const host = document.querySelector(".left-rail .quick");

@@ -148,7 +148,12 @@ test("standalone adds a month-selectable overview calendar wired to the existing
   assert.match(html, /\.auction-calendar-head \.panel-heading \{[^}]*white-space: nowrap/);
   assert.match(html, /\.auction-calendar-nav \.calendar-year \{ width: 72px; \}/);
   assert.match(html, /\.auction-calendar-nav \.calendar-month \{ width: 56px; \}/);
-  assert.match(html, /const latest = events\.at\(-1\)\?\.auction\.auctionDate\.slice\(0, 7\)/);
+  assert.match(html, /const latest = events\.at\(-1\)\?\.display\.date\.slice\(0, 7\)/);
+  assert.match(html, /const zone = selectedZone\(\)/);
+  assert.match(html, /displayAuction\(event\.auction, zone\)/);
+  assert.match(html, /event\.display\.date === date/);
+  assert.match(html, /\.zone-switch button/);
+  assert.match(html, /\.key-results > \.section-heading \{ justify-content: flex-start/);
   assert.match(html, /event\.status === "result" \? "auction-results" : "auction-calendar"/);
   assert.match(html, /const auctionIdentity = \(auction\) => `\$\{auction\.auctionDate\}\|\$\{auction\.type \|\| ""\}\|\$\{auction\.term \|\| ""\}`/);
   assert.match(html, /existing\.status === "upcoming" && event\.status === "result"/);
