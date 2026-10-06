@@ -150,9 +150,15 @@ test("standalone adds a month-selectable overview calendar wired to the existing
   assert.match(html, /\.auction-calendar-nav \.calendar-month \{ width: 64px; \}/);
   assert.match(html, /\.auction-calendar-nav select \{ height: 26px;/);
   assert.match(html, /\.auction-calendar-nav button \{ width: 28px;/);
+  assert.match(html, /const state = \{[^}]*excludeBills: true/);
+  assert.match(html, /className = "auction-calendar-filter"/);
+  assert.match(html, /aria-label", "캘린더에서 단기채 일정 제외"/);
+  assert.match(html, /!state\.excludeBills \|\| auction\.type !== "Bill"/);
+  assert.match(html, /state\.excludeBills = excludeBills\.checked/);
   assert.match(html, /\.key-results \.underlined::after \{ content: none; \}/);
   assert.match(html, /\.key-results \.kpi \{ min-height: 132px; padding-block: 10px; \}/);
   assert.match(html, /const latest = events\.at\(-1\)\?\.display\.date\.slice\(0, 7\)/);
+  assert.match(html, /: \[Number\(current\.year\), Number\(current\.month\)\]/);
   assert.match(html, /const zone = selectedZone\(\)/);
   assert.match(html, /displayAuction\(event\.auction, zone\)/);
   assert.match(html, /event\.display\.date === date/);

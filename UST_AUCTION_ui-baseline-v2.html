@@ -1052,7 +1052,10 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
   .auction-calendar-nav select { padding: 0 5px; }
   .auction-calendar-nav .calendar-year { width: 72px; }
   .auction-calendar-nav .calendar-month { width: 64px; }
+  .auction-calendar-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .auction-calendar-summary { color: var(--muted); font-size: 10px; line-height: 1.5; }
+  .auction-calendar-filter { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; color: #c4daf2; font-size: 10px; cursor: pointer; }
+  .auction-calendar-filter input { width: 13px; height: 13px; margin: 0; accent-color: #4d91d2; cursor: pointer; }
   .auction-calendar-weekdays,
   .auction-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
   .auction-calendar-weekdays span { color: #8397aa; text-align: center; font-size: 9px; }
@@ -1080,7 +1083,7 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
   (() => {
     "use strict";
 
-    const state = { data: null, zone: null, year: null, month: null, selectedKey: "" };
+    const state = { data: null, zone: null, year: null, month: null, selectedKey: "", excludeBills: true };
     const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
     const monthNames = Array.from({ length: 12 }, (_, index) => `${index + 1}월`);
     const zoneNames = { KST: "한국 KST", ET: "미국 동부 ET" };
@@ -1164,10 +1167,13 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
       if (!data) return [];
       const from = data.resultFrom || "0000-01-01";
       const to = data.resultTo || "9999-12-31";
+      const matchesSecurityType = (auction) => !state.excludeBills || auction.type !== "Bill";
       const results = (data.results || [])
-        .filter((auction) => auction.auctionDate >= from && auction.auctionDate <= to)
+        .filter((auction) => auction.auctionDate >= from && auction.auctionDate <= to && matchesSecurityType(auction))
         .map((auction) => ({ auction, status: "result" }));
-      const upcoming = (data.upcoming || []).map((auction) => ({ auction, status: "upcoming" }));
+      const upcoming = (data.upcoming || [])
+        .filter(matchesSecurityType)
+        .map((auction) => ({ auction, status: "upcoming" }));
       const unique = new Map();
       [...upcoming, ...results].forEach((event) => {
         const key = auctionIdentity(event.auction);
@@ -1230,7 +1236,10 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
       if (state.data !== data) {
         state.data = data;
         const latest = events.at(-1)?.display.date.slice(0, 7);
-        if (latest) [state.year, state.month] = latest.split("-").map(Number);
+        const current = formatParts(new Date(), zone);
+        [state.year, state.month] = latest
+          ? latest.split("-").map(Number)
+          : [Number(current.year), Number(current.month)];
       }
       state.zone = zone;
 
@@ -1316,6 +1325,21 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
       const summary = document.createElement("p");
       summary.className = "auction-calendar-summary";
       summary.textContent = `${state.year}년 ${state.month}월 · ${zoneNames[zone]} 기준 · 결과 ${resultCount}건 · 예정 ${upcomingCount}건`;
+      const meta = document.createElement("div");
+      meta.className = "auction-calendar-meta";
+      const filterLabel = document.createElement("label");
+      filterLabel.className = "auction-calendar-filter";
+      const excludeBills = document.createElement("input");
+      excludeBills.type = "checkbox";
+      excludeBills.checked = state.excludeBills;
+      excludeBills.setAttribute("aria-label", "캘린더에서 단기채 일정 제외");
+      excludeBills.addEventListener("change", () => {
+        state.excludeBills = excludeBills.checked;
+        state.selectedKey = "";
+        render();
+      });
+      filterLabel.append(excludeBills, document.createTextNode("단기채 제외"));
+      meta.append(summary, filterLabel);
       const weekdayRow = document.createElement("div");
       weekdayRow.className = "auction-calendar-weekdays";
       weekdays.forEach((weekday) => {
@@ -1380,7 +1404,7 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
       message.className = "auction-calendar-message";
       message.setAttribute("aria-live", "polite");
       message.textContent = "입찰을 선택하면 우측 결과 영역에 반영됩니다.";
-      calendar.append(head, summary, weekdayRow, grid, legend, message);
+      calendar.append(head, meta, weekdayRow, grid, legend, message);
     }
 
     function init() {
