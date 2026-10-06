@@ -1030,6 +1030,9 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
 <style id="auction-month-calendar-styles">
   .key-results > .section-heading { justify-content: flex-start; flex-wrap: wrap; column-gap: 12px; }
   .key-results > .section-heading > span { min-width: 0; }
+  .key-results .underlined::after { content: none; }
+  .key-results .kpi { min-height: 132px; padding-block: 10px; }
+  .key-results .kpi-value { margin-block: 7px 12px; }
   @media (width > 900px) {
     .dashboard { grid-template-columns: 360px minmax(0, 1fr); }
   }
@@ -1042,13 +1045,13 @@ je=document.getElementById(`root`);window.__UST_AUCTION_DATA__=Ae;if(!je)throw E
   .auction-calendar-head .panel-heading { flex: 1 1 auto; white-space: nowrap; }
   .auction-calendar-nav { display: flex; align-items: center; gap: 4px; }
   .auction-calendar-nav button,
-  .auction-calendar-nav select { height: 32px; border: 1px solid #345068; border-radius: 4px; background: #071724; color: #dce8f5; font-size: 11px; }
-  .auction-calendar-nav button { width: 34px; padding: 0; color: #c4daf2; font-size: 21px; line-height: 1; }
+  .auction-calendar-nav select { height: 26px; border: 1px solid #345068; border-radius: 4px; background: #071724; color: #dce8f5; font-size: 11px; }
+  .auction-calendar-nav button { width: 28px; padding: 0; color: #c4daf2; font-size: 18px; line-height: 1; }
   .auction-calendar-nav button:hover:not(:disabled) { background: #17354e; color: #fff; }
   .auction-calendar-nav button:disabled { cursor: default; opacity: .35; }
-  .auction-calendar-nav select { padding: 0 7px; }
+  .auction-calendar-nav select { padding: 0 5px; }
   .auction-calendar-nav .calendar-year { width: 72px; }
-  .auction-calendar-nav .calendar-month { width: 56px; }
+  .auction-calendar-nav .calendar-month { width: 64px; }
   .auction-calendar-summary { color: var(--muted); font-size: 10px; line-height: 1.5; }
   .auction-calendar-weekdays,
   .auction-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }

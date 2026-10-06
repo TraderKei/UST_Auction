@@ -196,7 +196,7 @@ export default function AuctionDashboard({ upcoming, results, source, updatedAt,
 
       <section className="main-area" aria-label="입찰 대시보드">
         <section className="panel key-results">
-          <div className="section-heading"><h2 className="panel-heading underlined">주요 입찰 결과</h2><span>{tab === "calendar" ? "직전 비교 결과: " : "선택 결과: "}{securityName(selectedResult)}{selectedResult ? ` · ${auctionDateTime(selectedResult, zone).full}` : ""}</span></div>
+          <div className="section-heading"><h2 className="panel-heading">주요 입찰 결과</h2><span>{tab === "calendar" ? "직전 비교 결과: " : "선택 결과: "}{securityName(selectedResult)}{selectedResult ? ` · ${auctionDateTime(selectedResult, zone).full}` : ""}</span></div>
           <div className="kpis">
             <article className="kpi subscription-kpi"><h3>응찰률 (%)</h3><strong className="kpi-value green-text">{subscription(selectedResult?.bidToCover)}</strong><div className="kpi-bottom"><div><small>직전 평균 · 유효 {validPrevious.length}/{historicalRows.length}건</small><b>{percent(avgSubscription)}</b></div><div><small>평균 대비</small><b>{signedPoints(subscriptionDelta)}</b></div></div></article>
             <article className="kpi stop-kpi"><h3>{stopName(selectedResult)}</h3><strong className="kpi-value">{percent(selectedResult?.stopRate, 3)}</strong></article>
