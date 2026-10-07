@@ -120,7 +120,9 @@ test("standalone validates and preserves filter in URL, date actions, reload, an
   const { html, loader } = await sources();
   assert.match(loader, /FILTER_IDS = new Set\(\["all", "bill", "note-2"/);
   assert.match(loader, /FILTER_IDS\.has\(candidate\) \? candidate : "all"/);
-  assert.equal((loader.match(/initialFilter,/g) ?? []).length, 2, "success and failure renders both preserve filter");
+  assert.match(loader, /renderRows\(rows, "live", retrievedAt\.toISOString\(\), range, defaults, initialFilter/);
+  assert.match(loader, /renderRows\(cached\.rows, "snapshot", cached\.retrievedAt, range, defaults, initialFilter/);
+  assert.match(loader, /source: "unavailable"[\s\S]*?initialFilter,/);
   assert.match(html, /function ustInitialFilter\(e\)/);
   assert.match(html, /Ee\.some\(e=>e\.id===t\)\?t:`all`/);
   assert.match(html, /n\.searchParams\.set\(`filter`,d\),window\.location\.assign/);
@@ -187,7 +189,7 @@ test("standalone loader maps official result fields and has valid JavaScript", a
     "direct_bidder_accepted", "indirect_bidder_accepted",
   ]) assert.ok(loader.includes(field), field);
   assert.match(loader, /allottedAtHigh: number\(row\.allocation_pctage\)/);
-  assert.match(loader, /source: "live"/);
+  assert.match(loader, /renderRows\(rows, "live"/);
 });
 
 test("standalone loader never renders the saved sample after an API failure", async () => {

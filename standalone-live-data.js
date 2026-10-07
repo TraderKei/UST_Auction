@@ -2,6 +2,9 @@
   "use strict";
 
   const API = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/auctions_query";
+  const CACHE_KEY = "ust-auction-official-rows-v1";
+  const REQUEST_TIMEOUT_MS = 30000;
+  const MAX_ATTEMPTS = 3;
   const FILTER_IDS = new Set(["all", "bill", "note-2", "note-3", "note-5", "note-7", "note-10", "bond-20", "bond-30", "tips", "frn"]);
   const FIELDS = [
     "record_date", "cusip", "security_type", "security_term", "original_security_term",
@@ -127,21 +130,30 @@
       url.searchParams.set("page[number]", String(page));
       url.searchParams.set("page[size]", "1000");
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      let response;
-      try {
-        response = await fetch(url, {
-          headers: { Accept: "application/json" },
-          cache: "no-store",
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeout);
+      let payload;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        try {
+          const response = await fetch(url, {
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            const error = new Error(`Fiscal Data API HTTP ${response.status} (page ${page})`);
+            error.retryable = response.status === 429 || response.status >= 500;
+            throw error;
+          }
+          payload = await response.json();
+          break;
+        } catch (error) {
+          if (attempt === MAX_ATTEMPTS || error.retryable === false) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        } finally {
+          clearTimeout(timeout);
+        }
       }
-      if (!response.ok) throw new Error(`Fiscal Data API HTTP ${response.status} (page ${page})`);
-
-      const payload = await response.json();
       rows.push(...(payload.data || []));
       if (page === 1) {
         totalPages = Number(payload.meta?.["total-pages"] ?? 1);
@@ -156,6 +168,42 @@
       throw new Error(`Fiscal Data API pagination incomplete (${rows.length}/${totalCount})`);
     }
     return rows;
+  }
+
+  function saveCache(from, to, rows, retrievedAt) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ from, to, rows, retrievedAt: retrievedAt.toISOString() }));
+    } catch {
+      // file:// storage can be disabled; live retrieval must still work.
+    }
+  }
+
+  function readCache(from, to) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+      return cached?.from <= from && cached?.to >= to && Array.isArray(cached.rows) && cached.rows.length
+        && !Number.isNaN(Date.parse(cached.retrievedAt)) ? cached : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function renderRows(rows, source, retrievedAt, range, defaults, initialFilter, todayText, upcomingTo) {
+    const normalized = rows.map(normalize).filter((row) => row.cusip && row.auctionDate);
+    const results = normalized
+      .filter((row) => row.bidToCover !== null)
+      .sort((a, b) => b.auctionDate.localeCompare(a.auctionDate) || a.cusip.localeCompare(b.cusip));
+    const upcoming = normalized
+      .filter((row) => row.auctionDate >= todayText && row.auctionDate <= upcomingTo && row.bidToCover === null)
+      .sort((a, b) => a.auctionDate.localeCompare(b.auctionDate) || a.cusip.localeCompare(b.cusip));
+    if (!results.length) throw new Error("Fiscal Data API returned no auction results");
+    window.__UST_RENDER_AUCTIONS__({
+      upcoming, results, source, updatedAt: retrievedAt,
+      resultFrom: range.from, resultTo: range.to,
+      defaultResultFrom: defaults.from, defaultResultTo: defaults.to,
+      initialFilter,
+    });
+    return { results: results.length, upcoming: upcoming.length };
   }
 
   function keepStatusVisible(kind, badgeText, message) {
@@ -200,34 +248,28 @@
     // 표시 시작일 이전 24개월 롤링 기준선과 직전 관측치를 함께 확보합니다.
     const from = shiftCalendarMonths(range.from, -25);
     const to = range.to > upcomingTo ? range.to : upcomingTo;
+    const todayText = isoDate(today);
 
     try {
-      const rows = (await fetchRows(from, to))
-        .map(normalize)
-        .filter((row) => row.cusip && row.auctionDate);
-      const todayText = isoDate(today);
-      const results = rows
-        .filter((row) => row.bidToCover !== null)
-        .sort((a, b) => b.auctionDate.localeCompare(a.auctionDate) || a.cusip.localeCompare(b.cusip));
-      const upcoming = rows
-        .filter((row) => row.auctionDate >= todayText && row.auctionDate <= upcomingTo && row.bidToCover === null)
-        .sort((a, b) => a.auctionDate.localeCompare(b.auctionDate) || a.cusip.localeCompare(b.cusip));
-      if (!results.length) throw new Error("Fiscal Data API returned no auction results");
-
-      window.__UST_RENDER_AUCTIONS__({
-        upcoming,
-        results,
-        source: "live",
-        updatedAt: retrievedAt.toISOString(),
-        resultFrom: range.from,
-        resultTo: range.to,
-        defaultResultFrom: defaults.from,
-        defaultResultTo: defaults.to,
-        initialFilter,
-      });
-      const message = `미국 재무부 Fiscal Data 공식 API 자료입니다. 조회 범위 ${from}~${to}, 결과 ${results.length}건, 예정 ${upcoming.length}건.`;
+      const rows = await fetchRows(from, to);
+      const counts = renderRows(rows, "live", retrievedAt.toISOString(), range, defaults, initialFilter, todayText, upcomingTo);
+      saveCache(from, to, rows, retrievedAt);
+      const message = `미국 재무부 Fiscal Data 공식 API 자료입니다. 조회 범위 ${from}~${to}, 결과 ${counts.results}건, 예정 ${counts.upcoming}건.`;
       requestAnimationFrame(() => keepStatusVisible("live", "공식 API 수신", message));
     } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      const cached = readCache(from, to);
+      if (cached) {
+        try {
+          const counts = renderRows(cached.rows, "snapshot", cached.retrievedAt, range, defaults, initialFilter, todayText, upcomingTo);
+          requestAnimationFrame(() => keepStatusVisible(
+            "snapshot", "저장된 공식 자료", `공식 API 재조회 실패 (${reason}). ${cached.retrievedAt} 수신본을 표시합니다. 결과 ${counts.results}건, 예정 ${counts.upcoming}건.`,
+          ));
+          return;
+        } catch {
+          // Ignore invalid cache and show the explicit unavailable state below.
+        }
+      }
       window.__UST_RENDER_AUCTIONS__({
         upcoming: [],
         results: [],
@@ -239,7 +281,6 @@
         defaultResultTo: defaults.to,
         initialFilter,
       });
-      const reason = error instanceof Error ? error.message : String(error);
       requestAnimationFrame(() => keepStatusVisible(
         "unavailable",
         "수신 실패",
