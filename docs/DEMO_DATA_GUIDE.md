@@ -11,7 +11,7 @@
 - PostgreSQL 16 미만
 - 미확인 테이블·뷰가 있거나, `DEMO_FIXTURE` 이력이 없는 비어 있지 않은 DB
 
-빈 DB에는 기존 Alembic migration `20260903_0001`을 `upgrade head`로 적용한다. 이미 확인된 `DEMO_FIXTURE` DB에는 같은 fixture를 재실행해도 current fact, auction revision, QRA document version과 lineage가 증가하지 않는다. loader는 DROP, TRUNCATE를 수행하지 않는다.
+빈 DB에는 Alembic migrations `20260903_0001`–`20261007_0002`를 `upgrade head`로 적용한다. 이미 확인된 `DEMO_FIXTURE` DB에는 같은 fixture를 재실행해도 current fact, auction revision, QRA document version과 lineage가 증가하지 않는다. loader는 DROP, TRUNCATE를 수행하지 않는다.
 
 예시:
 

@@ -48,7 +48,7 @@ createdb -U postgres -O ust_app -E UTF8 ust_data
 .\.venv\Scripts\alembic.exe current
 ```
 
-`init-db`는 Alembic upgrade head를 실행한다. 재실행은 no-op이다. 빈 DB용 전체 DDL은 `db/ust_pipeline_schema.sql`, 마이그레이션은 `db/migrations/versions/20260903_0001_initial.py`다. SQL 직접 적용 시 `psql -v ON_ERROR_STOP=1 -1 -f db/ust_pipeline_schema.sql`로 트랜잭션 적용하고 Alembic 사용 전 `alembic stamp head`를 수행한다. 같은 DB에 DDL을 중복 적용하지 않는다.
+`init-db`는 Alembic upgrade head를 실행한다. 재실행은 no-op이다. 빈 DB용 전체 DDL은 `db/ust_pipeline_schema.sql`, 마이그레이션은 `db/migrations/versions/20260903_0001_initial.py`와 `20261007_0002_align_v3_event_status.py`다. 두 번째 마이그레이션은 v3와 동일하게 `bid_to_cover_ratio` 존재 여부로 결과·예정을 구분한다. SQL 직접 적용 시 `psql -v ON_ERROR_STOP=1 -1 -f db/ust_pipeline_schema.sql`로 트랜잭션 적용하고 Alembic 사용 전 `alembic stamp head`를 수행한다. 같은 DB에 DDL을 중복 적용하지 않는다.
 
 검토용 SQL만 출력할 수도 있다.
 

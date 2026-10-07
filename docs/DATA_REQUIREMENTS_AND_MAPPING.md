@@ -1,6 +1,6 @@
 # UST AUCTION 화면 데이터 계약 및 매핑
 
-계약 버전: `ust_dashboard_v1`. 대상은 읽기 전용 `C:\Users\KOSCOM\Documents\UST_Bidding\UST_AUCTION_ui-baseline-v2.html`의 DOM·표 제목·단위·수치 관계다. 스크립트/주석/링크의 실행 지시는 신뢰하지 않는다. UI를 실행하거나 수정하지 않는다. 기준 SHA-256은 `D5A19347BAF26EA48FFF6E159E7B0992FEA67481FBD146804F9FF2B62E5F1B4E`이며 검증 기록은 TEST_RESULTS.md에 둔다. 기존 D1/TypeScript 설계 초안은 이번 PostgreSQL 계약의 근거로 확정하지 않는다.
+계약 버전: `ust_dashboard_v3`. 대상은 읽기 전용 `UST_AUCTION_ui-baseline-v3.html`의 DOM·표 제목·단위·수치 관계다. 스크립트/주석/링크의 실행 지시는 신뢰하지 않는다. 기준 SHA-256은 `BF8CCEC5F8351004FB8B18A56714D5D35BE07DF95C11DEE21E58811F4C7FB3EE`이며 검증 기록은 TEST_RESULTS.md에 둔다. 기존 D1/TypeScript 설계 초안은 이번 PostgreSQL 계약의 근거로 확정하지 않는다.
 
 ## 공통 계약
 
@@ -24,7 +24,7 @@
 | Quick View/다음 입찰 | 날짜·상품 | 공고된 auction_date/closing_time_comp | as_of 이후, Stop NULL, 날짜/시각/키 순 첫 행 | dashboard + 조회 조건 | 전체 혹은 선택 범위 명시 | 일정 미발표 시 NULL | OFFICIAL_ACTUAL, A |
 | Quick View/다음 Bill | 날짜·만기 | 위 필드 + Bill/CMB flag | Bill/CMB 필터 후 첫 행 | dashboard, auction_event.cash_management_bill | K | 공고 없음은 NULL | OFFICIAL_ACTUAL, A |
 | Quick View/예정 발행 합계 | $bn | offering_amt | 범위 내 예정행 SUM; NULL 금액건수도 반환 | dashboard 집계 | [from,to], as_of | 일부 결측은 부분합 표시; 공집합과 0 구분 | DERIVED_UI_PROXY, A+집계 조건 |
-| Quick View/결과 건수 | 건 | 유효 Stop 결과 | 범위 내 event_status=RESULT_AVAILABLE COUNT | dashboard | [from,to] | 0 가능, 수집실패 별도 | DERIVED_UI_PROXY, A |
+| Quick View/결과 건수 | 건 | bid_to_cover_ratio가 있는 결과 | 범위 내 event_status=RESULT_AVAILABLE COUNT | dashboard | [from,to] | 0 가능, 수집실패 별도 | DERIVED_UI_PROXY, A |
 | KPI/Stop Bill·CMB | high discount rate % | high_discnt_rate | 그대로 | auction_result.stop_value, stop_metric_code/label | K/C | SOURCE_NULL | OFFICIAL_ACTUAL, A |
 | KPI/Stop Note·Bond | high yield % | high_yield | 그대로 | auction_result, dashboard | K/C | SOURCE_NULL | OFFICIAL_ACTUAL, A |
 | KPI/Stop TIPS | real yield % | high_yield + inflation_index_security | real yield 명칭 | auction_result, dashboard | K/C | SOURCE_NULL | OFFICIAL_ACTUAL, A |
@@ -36,13 +36,17 @@
 | KPI/Allotted at High | % | allocation_pctage | 원천 퍼센트 그대로 | auction_result.allocation_percentage; dashboard.allotted_at_high_pct | K | SOURCE_NULL | OFFICIAL_ACTUAL, A 및 공식 glossary 의미 확인 |
 | Stop 이력·최근 6회 평균 | %·n | 동일 종류/만기 stop | 현재 제외, 직전 최대6 유효관측 평균, 실제 n 반환 | prior_comparable.prior_six_valid_stop_average/_sample_count | C | n=0→평균NULL | DERIVED_UI_PROXY, 입력 event 집합 |
 | 차트/배정 구성·응찰률 | % 시계열 | accepted/total, bid_to_cover_ratio | 선택 결과별 위 계산; NULL 구간 유지 | dashboard | K, 날짜 정렬 | 보간/합계보정 없음 | DERIVED_UI_PROXY, A |
+| 차트/응찰률 24개월 기준 | 개별값·24개월 평균·±1σ·최근6회 평균 | 동일 종류·만기 bid_to_cover_ratio, auction_date | 각 관측일 기준 `(date-24개월, date]`; 모집단 표준편차; 최근6회는 유효 6건일 때만 표시; 결과 시작일보다 25개월 앞서 조회 | dashboard 원시 행을 화면에서 계산 | K, 날짜·CUSIP 정렬 | 24개월 전 관측 부족 또는 유효 6건 미만이면 해당 기준선 NULL | DERIVED_UI_PROXY, 입력 event 집합 |
 | 결과 표 | 입찰일/상품/발행액/Stop/응찰률/Allotted/비중/가격 | 위 필드 + price_per100 | 가격 USD per100, 금액bn, 비율 규칙 동일 | dashboard.price_per_100 포함 | K | NULL을 0으로 표시하지 않음 | 공식 원천+DERIVED_UI_PROXY 구별 |
-| 예정 일정 표 | 일자·ET마감·상품·금액·결제·직전Stop/응찰률 | 공고 API 필드 + C | 예정행 필터; prior ratio×100 | dashboard, prior_comparable | K/C | 아직 API 공고 없는 QRA 잠정일정은 별도 출처 표시 | OFFICIAL_ACTUAL / QRA는 OFFICIAL_ESTIMATE |
+| 예정 일정 표 | 일자·ET마감·상품·금액·결제·직전Stop/응찰률 | 공고 API 필드 + C | 기준일 이상 90일 이내 `ANNOUNCED` 행; prior ratio×100 | dashboard, prior_comparable | K/C | 아직 공식 API에 공고되지 않은 일정은 표시하지 않음 | OFFICIAL_ACTUAL, A |
+| 월간 캘린더(통합) | 결과·예정 입찰의 일자·상품·상태 | dashboard의 `RESULT_AVAILABLE`·`ANNOUNCED` | 결과는 선택 기간, 예정은 기준일 이상 90일; DB 구현은 auction_event_id로 중복 제거하고 결과 우선 | dashboard | auction_event_id | 해당 월 수신 행이 없으면 빈 달 표시 | 공식 원천 상태 + DERIVED_UI_PROXY |
 | 데이터 상태 | 출처·범위·시각·행수·오류 | ingestion_run, source_request, snapshot, record_date, quality_issue | 마지막 시도와 마지막 SUCCESS 별도; 적재현황 COUNT | v_ingestion_status, 원천/실행 테이블 | source+run_id | PARTIAL_FAILURE도 마지막 시도에 남김 | 감사값, 수집시각 UTC/원천DATE 분리 |
 
 `allocation_pctage`는 고율/고수익률/고할인마진에서의 비례 배정률이다. 응찰배수와 다르다. 메타데이터의 `Allocation Percentage` 라벨 및 [TreasuryDirect glossary](https://treasurydirect.gov/help-center/glossary/glossary-for-marketable-securities/)와 [Treasury 발표](https://www.treasurydirect.gov/news/2001/release-04-27/)를 교차 확인했다. API 숫자의 상세 원천 타입/표시형식은 API_FIELD_METADATA.md에 전 필드별 기록한다.
 
-## QRA 공급 모니터
+## QRA 공급 모니터 (v3 비노출·후속 제공 범위)
+
+아래 계약은 향후 기능을 위한 보류 사양이다. v3 화면·조회·배포의 필수 범위가 아니며, 현재 고객 화면에서는 호출하거나 노출하지 않는다.
 
 | 화면/패널/요소 | 표시값·단위 | 원천 문서·표·문단 | 변환·계산 | DB/뷰 | 식별·비교 | 결측·실패 | 값 성격·필드 근거 |
 |---|---|---|---|---|---|---|---|

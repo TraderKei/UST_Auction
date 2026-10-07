@@ -60,7 +60,21 @@ def main():
     engine=create_engine(Settings().database_url)
     meta=json.loads((ROOT/'tests_pipeline/fixtures/auctions_page_1.json').read_text(encoding='utf-8'))['meta']
     fields=set(AUCTION_FIELDS.split(',')); fmap=source_map()
-    output=['# PostgreSQL DB 명세','', 'PostgreSQL 16 / schema `ust` / migration `20260903_0001`. 실제 적용 DB의 catalog에서 타입·NULL·기본값·제약·인덱스를 추출했다. 설명과 원천 매핑은 코드 계약과 함께 관리한다.','',
+    output=['# PostgreSQL DB 명세','', 'PostgreSQL 16 / schema `ust` / migrations `20260903_0001`–`20261007_0002`. 실제 적용 DB의 catalog에서 타입·NULL·기본값·제약·인덱스를 추출했다. 설명과 원천 매핑은 코드 계약과 함께 관리한다. 현재 화면 계약은 `UST_AUCTION_ui-baseline-v3.html`이다.','',
+    '## v3 구현 범위','',
+    '- v3의 고객 화면은 `입찰 결과` 단일 상단 메뉴로 구성한다. 예정 입찰 일정과 월간 캘린더는 같은 화면 안에서 `v_auction_dashboard`의 `ANNOUNCED` 행을 사용한다. 별도 일정 데이터 모델을 만들지 않는다.',
+    '- 화면에 노출하지 않는 API 필드·데이터 구조 안내는 내부 문서인 `API_FIELD_METADATA.md`, 이 명세, `DATA_REQUIREMENTS_AND_MAPPING.md`에서만 관리한다. 고객 화면 제거는 원천 필드·감사·lineage 저장 삭제를 뜻하지 않는다.',
+    '- QRA 공급 기능은 v3 배포 범위에서 제외한다. 기존 `qra_*` 테이블과 `v_qra_*` 읽기 모델은 향후 제공을 위한 보류 스키마이며, v3 조회·배포의 필수 객체나 데이터 적재 선행조건이 아니다.',
+    '- 실시간 2Y·10Y·30Y 시장금리는 v3에서 미연결 상태다. 검증된 별도 원천이 생기기 전에는 시장금리 테이블을 추가하거나 입찰 Stop으로 대체하지 않는다.','',
+    '### v3 화면 조회 계약','',
+    '| 화면 요소 | DB 객체·필드 | 조회·계산 규칙 |',
+    '|---|---|---|',
+    '| 최근 입찰·KPI·결과표 | `v_auction_dashboard`의 `RESULT_AVAILABLE` 행 | 사용자 결과 기간과 상품 필터를 적용한다. CUSIP는 내부 식별에만 사용하고 화면에는 표시하지 않는다. |',
+    '| 예정 입찰 일정·월간 캘린더 | `v_auction_dashboard`의 `ANNOUNCED` 행 | 기준일 이상 90일 이내의 공식 공고만 표시한다. 결과와 예정이 같은 사건이면 `auction_event_id` 기준으로 결과를 우선한다. |',
+    '| 낙찰금리·참여자 비중 | `stop_value`, `*_share_pct`, `other_ui_residual_pct` | 선택 결과와 동일한 `security_type + normalized_security_term`만 비교한다. |',
+    '| 응찰률 KPI | `bid_to_cover_ratio` | 원본 배수에 100을 곱해 %로 표시한다. 선택 결과 이전 최대 6개 유효값 평균과 %p가 아닌 퍼센트 값 차이를 계산한다. |',
+    '| 응찰률 장기 차트 | `bid_to_cover_ratio`, `auction_date` | 동일 상품·만기 전 이력을 날짜순으로 계산한다. 각 관측일 직전 24개월 초과 경계의 유효값으로 평균·모집단 표준편차(±1σ)를 계산하고 최근 6회 평균은 6건이 모두 있을 때만 표시한다. 조회 시작일보다 25개월 앞선 warm-up 데이터를 확보한다. |',
+    '| 상태·출처 | `v_ingestion_status`, `source_snapshot` | 마지막 시도와 성공을 구분하며, 수신 실패 시 표본값으로 대체하지 않는다. |','',
     '## ERD','', '```mermaid','erDiagram',' ingestion_run ||--o{ source_request : attempts',' source_request ||--o{ source_snapshot : captures',' source_snapshot ||--o{ normalized_record_lineage : proves',' security_master ||--o{ auction_event : identifies',' auction_event ||--|| auction_result : result',' auction_event ||--|| auction_bidder_allocation : allocations',' auction_event ||--o{ auction_revision : revises',' qra_refunding ||--o{ qra_document : publishes',' qra_document ||--o{ qra_document_version : versions',' source_snapshot ||--o{ qra_document_version : preserves',' qra_document_version ||--o{ qra_supply : supports',' qra_document_version ||--o{ qra_borrowing_estimate : supports',' qra_document_version ||--o{ qra_auction_size : supports',' qra_document_version ||--o{ qra_tga_path : supports',' qra_document_version ||--o{ qra_financing_mix : supports',' qra_document_version ||--o{ qra_guidance : supports',' qra_document_version ||--o{ qra_tentative_auction : supports',' qra_document_version ||--o{ qra_buyback_operation : supports',' qra_document_version ||--o{ qra_buyback_policy : supports',' qra_document_version ||--o{ qra_dealer_survey : supports',' qra_dealer_survey ||--o{ qra_dealer_survey_value : cells',' derived_metric_method ||--o{ derived_metric_method_parameter : weights',' derived_metric_method ||--o{ derived_metric_result : computes',' source_snapshot ||--o{ data_quality_issue : validates','```','',
     '## 공통 갱신·보관 정책','',
     '- A(감사): 실행마다 추가. 원본/정정/문서버전/계산기록은 무기한 보관하며 자동 삭제하지 않는다. DB 백업과 raw 디렉터리를 함께 보관한다. FK의 CASCADE는 명시적인 관리 삭제 시에만 적용되며 수집 명령은 실행/원본 이력을 삭제하지 않는다.',

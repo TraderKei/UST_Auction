@@ -71,7 +71,7 @@ def test_empty_database_migrates_and_all_catalog_objects_are_populated(loaded_de
     assert all(count >= 1 for count in loaded_demo["views"].values())
     engine = create_engine(demo_url)
     try:
-        assert migration_version(engine) == "20260903_0001"
+        assert migration_version(engine) == "20261007_0002"
         assert int(engine.connect().execute(text("SHOW server_version_num")).scalar_one()) >= 160000
     finally:
         engine.dispose()

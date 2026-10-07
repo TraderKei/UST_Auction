@@ -1,8 +1,8 @@
 # UST Auction — 다크 대시보드
 
-## 입찰·QRA 데이터 수신 프로그램 (PostgreSQL)
+## 입찰 데이터 수신 프로그램 (PostgreSQL)
 
-Python 3.12+ / PostgreSQL 16 수집기와 DB는 공식 Fiscal Data·QRA 원천을 적재합니다. React 화면도 Fiscal Data Auctions API의 실제 데이터를 직접 읽으며, API 실패 시 하드코딩 표본으로 대체하지 않습니다. PostgreSQL은 전체 lineage·revision·QRA fact의 영속 저장과 검증에 사용합니다.
+Python 3.12+ / PostgreSQL 16 수집기와 DB는 공식 Fiscal Data 입찰 원천을 적재합니다. 최종 v3 화면도 Fiscal Data Auctions API의 실제 데이터를 직접 읽으며, API 실패 시 하드코딩 표본으로 대체하지 않습니다. PostgreSQL은 전체 lineage·revision의 영속 저장과 검증에 사용합니다. 기존 QRA 수집·스키마는 향후 제공을 위한 보류 범위이며 v3 배포의 선행조건이 아닙니다.
 
 ```powershell
 py -3.12 -m venv .venv
@@ -38,12 +38,12 @@ $env:UST_DEMO_DATABASE_URL='postgresql+psycopg://ust_app@localhost:5432/ust_pipe
 ## 먼저 알아둘 점
 
 - 이전 `.codex/.chatgpt-projects/.../ust-auction-dashboard.html`은 별도 파일입니다. 그 파일을 새로고침해도 현재 프로젝트의 수정은 보이지 않습니다.
-- 저장소의 `UST_AUCTION_ui-baseline-v2.html`은 첨부 기준 화면의 디자인·레이아웃·탭 구성을 그대로 유지하면서 Fiscal Data API 결과를 기존 카드·차트·표에 연결합니다. 앱과 같은 명목채 만기별 필터를 제공하며, 인터넷 연결이 없거나 API가 실패하면 과거 표본으로 대체하지 않고 기존 영역에 수신 실패를 표시합니다.
+- 저장소의 `UST_AUCTION_ui-baseline-v3.html`이 최종 화면 계약입니다. 상단은 `입찰 결과`만 제공하고 예정 일정과 월간 캘린더를 같은 화면에 포함합니다. 인터넷 연결이 없거나 API가 실패하면 과거 표본으로 대체하지 않고 기존 영역에 수신 실패를 표시합니다.
 - 이 프로젝트는 **로컬 주소 `http://localhost:3000/`**에서 확인합니다. 서버가 실행 중이어야 열립니다.
 - 화면의 응찰률은 백분율만 표시합니다. 예: API의 원본 배수 2.48 → 화면의 248.0%. 배수와 백분율을 별도 지표로 중복 표시하지 않습니다.
-- 화면은 Fiscal Data Auctions API의 최근 730일과 향후 90일 범위를 조회합니다. 요청 실패·불완전 pagination·결과 0건이면 빈 상태와 원인을 표시하고 과거 표본을 보여주지 않습니다.
+- 화면의 기본 결과 기간은 달력 기준 최근 2년이고, 24개월 응찰률 기준선 계산을 위해 시작일보다 25개월 앞선 이력을 함께 조회합니다. 예정 일정은 기준일 이후 90일까지 조회합니다. 요청 실패·불완전 pagination·결과 0건이면 빈 상태와 원인을 표시하고 과거 표본을 보여주지 않습니다.
 - Allotted at High는 공식 `allocation_pctage`에 연결했습니다. When-Issued, Tail, 실시간 Market Context는 검증된 원천이 없어 N/A이며 Stop이나 일별 금리로 대체하지 않습니다.
-- 화면에 포함된 `API 필드` / `데이터 구조` 문구는 기존 참고 설계입니다. 검증된 파이프라인 계약은 `docs/API_FIELD_METADATA.md`, `docs/DB_SPEC.md`를 따릅니다.
+- `API 필드`와 `데이터 구조`는 고객 화면에 노출하지 않으며, 내부 구현 계약은 `docs/API_FIELD_METADATA.md`, `docs/DB_SPEC.md`, `docs/DATA_REQUIREMENTS_AND_MAPPING.md`에서 관리합니다.
 - CUSIP는 화면에서 제거했으며 내부 식별 데이터는 보존했습니다. Price는 상단 KPI에서 제거하고 하단 결과표의 `낙찰가격`은 유지했습니다.
 - 기본 시각은 한국 KST입니다. 상단 버튼으로 미국 동부 ET로 바꿀 수 있습니다. 모든 날짜는 YYYY-MM-DD이며, 시각이 없는 날짜는 임의 변환하지 않고 `원문 ET`를 표시합니다. 새로고침하면 기본 KST로 돌아갑니다.
 

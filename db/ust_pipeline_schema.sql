@@ -305,7 +305,7 @@ SELECT e.auction_event_id,e.cusip,e.security_type,e.security_term,e.normalized_s
  a.indirect_bidder_accepted_usd/NULLIF(r.total_accepted_usd,0)*100-pc.prior_indirect_share_pct AS indirect_change_pp,
  a.direct_bidder_accepted_usd/NULLIF(r.total_accepted_usd,0)*100-pc.prior_direct_share_pct AS direct_change_pp,
  a.primary_dealer_accepted_usd/NULLIF(r.total_accepted_usd,0)*100-pc.prior_primary_dealer_share_pct AS primary_dealer_change_pp,
- CASE WHEN r.stop_value IS NULL THEN 'ANNOUNCED' ELSE 'RESULT_AVAILABLE' END AS event_status,
+ CASE WHEN r.bid_to_cover_ratio IS NULL THEN 'ANNOUNCED' ELSE 'RESULT_AVAILABLE' END AS event_status,
  e.current_snapshot_id,e.last_seen_at
 FROM ust.auction_event e LEFT JOIN ust.auction_result r USING(auction_event_id)
 LEFT JOIN ust.auction_bidder_allocation a USING(auction_event_id) LEFT JOIN ust.v_auction_prior_comparable pc USING(auction_event_id);

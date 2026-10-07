@@ -1,6 +1,6 @@
 # UST Auction/QRA 구현 상태
 
-감사 기준일: 2026-09-23 KST. 이 문서는 파일 존재가 아니라 현재 산출물, 재실행 결과, 보존된 공식 원천/통합검증 로그를 함께 기준으로 한다.
+최종 갱신일: 2026-10-07 KST. 이 문서는 파일 존재가 아니라 현재 산출물, 재실행 결과, 보존된 공식 원천/통합검증 로그를 함께 기준으로 한다.
 
 | Phase | 상태 | 완료 산출물 | 마지막 검증 | 남은 일/차단 원인 |
 | ----- | ---- | ----------- | ----------- | ----------------- |
@@ -20,6 +20,7 @@
 | 13 | COMPLETE | 안전한 demo loader, 27-table/8-view Excel, lineage/coverage/validation, `DEMO_DATA_GUIDE.md` | 2026-09-07 unit 2 passed; PG integration 5 passed; offline 80 passed/2 live deselected; Excel 41 sheets 재오픈 PASS | 공식 fixture에 없는 CMB·Note/Bond·TIPS·FRN Stop과 동일 CUSIP 두 번째 사건은 생성하지 않고 gap 기록 |
 | 14 | COMPLETE | 실데이터 DB 적재, UI Fiscal Data 전환, 표본 fallback 제거, Allotted at High 연결, `ACTUAL_DATA_AVAILABILITY.md` | 2026-09-23 입찰 763건/재실행 763 unchanged, QRA 17문서 unchanged, DB validate 17/17 PASS, UI live 결과 882·예정 6 | WI/Tail/실시간 시장금리와 source-null 항목은 명시적 gap 유지 |
 | 15 | COMPLETE | `UST_AUCTION_ui-baseline-v2.html` 기준 UI 보존형 공식 API 연결, 전체 pagination, 기존 결과 선택·필터·탭 유지, 실패 시 fail-closed | 2026-09-28 원본 SHA-256 복원 검증, JS syntax/CORS, desktop/mobile 렌더링, localhost 실제 클릭·콘솔 검증 | 연결 코드 제거 시 첨부 원본과 byte-for-byte 일치; 직접 실행용 CORS 확인 |
+| 16 | COMPLETE | 최종 `UST_AUCTION_ui-baseline-v3.html` 범위에 맞춘 DB Spec·화면 매핑, v3 결과/예정 판정 migration | 2026-10-07 Node 60 passed, pipeline offline 68 passed, schema 2 passed/1 integration skipped, lint/build 통과 | QRA 스키마는 후속 제공용 보류 범위; v3 배포 선행조건 아님 |
 
 ## 산출물 신뢰 구분
 
