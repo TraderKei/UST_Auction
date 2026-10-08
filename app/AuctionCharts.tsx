@@ -97,8 +97,8 @@ export function SubscriptionChart({ rows, onSelect, zone }: ChartProps) {
 export function AllocationChart({ rows, onSelect, zone }: ChartProps) {
   const width = 270 / Math.max(1, rows.length);
   return <div className="chart-box">
-    {!rows.length ? <div className="chart-empty">배정 데이터 없음</div> : <svg viewBox="0 0 350 218" role="img" aria-label="참여자별 낙찰 비중 — 전체 낙찰액 기준 100% 누적 막대 차트">
-      <title>입찰별 배정 비중. 기타 금액을 포함한 전체 낙찰액 기준.</title>
+    {!rows.length ? <div className="chart-empty">배정 데이터 없음</div> : <svg viewBox="0 0 350 218" role="img" aria-label="참여자별 낙찰 비중 — 경쟁입찰 낙찰액 기준 100% 누적 막대 차트">
+      <title>입찰별 배정 비중. 경쟁입찰 낙찰액 기준.</title>
       {[0, 25, 50, 75, 100].map(value => <g key={value}><line x1="45" x2="338" y1={175 - value * 1.5} y2={175 - value * 1.5} className="grid-line" /><text x="39" y={179 - value * 1.5} textAnchor="end">{value}%</text></g>)}
       {rows.map((row, index) => {
         const mix = awardMix(row);

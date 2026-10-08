@@ -8,7 +8,7 @@ const connectedRenderer = "je=document.getElementById(`root`);window.__UST_AUCTI
 const loaderTag = '<script src="./standalone-live-data.js"></script>';
 const connectedAllottedCard = "(0,A.jsx)(`strong`,{className:T?.allottedAtHigh==null?`kpi-value unavailable`:`kpi-value`,children:S(T?.allottedAtHigh)}),(0,A.jsx)(`div`,{className:`kpi-bottom`,children:(0,A.jsxs)(`div`,{children:[(0,A.jsx)(`small`,{children:`최고 낙찰금리 배정률`}),(0,A.jsx)(`b`,{children:T?.allottedAtHigh==null?`자료 미연결`:`allocation_pctage`})]})})";
 const connectedAllottedCell = "(0,A.jsx)(`td`,{className:e.allottedAtHigh==null?`unavailable`:``,children:S(e.allottedAtHigh)})";
-const connectedAllocationSubtitle = "(0,A.jsxs)(`p`,{className:`chart-subtitle`,children:n===`live`?[se(T),` · 동일 종류·만기 `,ge.length,`건 · 전체 낙찰액 기준`]:[`최근 `,ge.length,`건 · 전체 낙찰액 기준`]})";
+const connectedAllocationSubtitle = "(0,A.jsxs)(`p`,{className:`chart-subtitle`,children:n===`live`?[se(T),` · 동일 종류·만기 `,ge.length,`건 · 경쟁입찰 낙찰액 기준`]:[`최근 `,ge.length,`건 · 경쟁입찰 낙찰액 기준`]})";
 const connectedSubscriptionSubtitle = "(0,A.jsxs)(`p`,{className:`chart-subtitle`,children:[se(T),` · 동일 종류·만기 `,subscriptionRows.length,`건 · 장기 기준과 최근 흐름`]})";
 const connectedSubscriptionChart = "(0,A.jsx)(Me,{rows:subscriptionRows,onSelect:Ae,zone:l})";
 const connectedSubscriptionLegend = "(0,A.jsxs)(`div`,{className:`legend`,children:[(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`legend-dot`}),`개별 입찰값`]}),(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`legend-line baseline`}),`24개월 평균`]}),(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`swatch sigma-band`}),`24개월 평균 ±1σ`]}),(0,A.jsxs)(`span`,{children:[(0,A.jsx)(`i`,{className:`legend-line current`}),`최근 6회 평균`]})]})";

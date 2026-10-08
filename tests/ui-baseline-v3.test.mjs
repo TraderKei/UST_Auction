@@ -39,3 +39,19 @@ test("v3 retains schedules inside auction results", async () => {
   assert.match(html, /입찰 예정/);
   assert.match(html, /standalone-live-data\.js/);
 });
+
+test("v3 참여자별 낙찰 비중은 경쟁입찰 낙찰액 기준으로 공식 발표와 일치", async () => {
+  const html = await readFile(htmlUrl, "utf8");
+  const start = html.indexOf("function re(e){if(!e)return null;");
+  const end = html.indexOf("function ie(", start);
+  assert.ok(start >= 0 && end > start, "내장 낙찰 비중 계산식을 찾을 수 있어야 함");
+  const calculation = html.slice(start, end);
+  const mix = new Function("row", `${calculation}; return re(row);`)({
+    totalAccepted: 39_926_321_900,
+    indirectAccepted: 31_063_238_000,
+    directAccepted: 6_618_200_000,
+    dealerAccepted: 984_000_000,
+  });
+  assert.deepEqual(mix.map(value => Number(value.toFixed(1))), [80.3, 17.1, 2.5, 0]);
+  assert.match(html, /경쟁입찰 낙찰액 기준/);
+});

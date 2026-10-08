@@ -12,13 +12,14 @@ export function percent(value: number | null | undefined, digits = 1): string {
 export const subscription = (ratio: number | null | undefined) => percent(subscriptionPercent(ratio));
 
 export function awardMix(row: TreasuryAuction | undefined): number[] | null {
-  if (!row || row.totalAccepted == null || row.totalAccepted <= 0) return null;
+  if (!row) return null;
   const values = [row.indirectAccepted, row.directAccepted, row.dealerAccepted];
   if (values.some(value => value == null || !Number.isFinite(value) || value < 0)) return null;
-  const shares = values.map(value => value! / row.totalAccepted! * 100);
-  const sum = shares.reduce((a, b) => a + b, 0);
-  if (sum > 100.01) return null;
-  return [...shares, Math.max(0, 100 - sum)];
+  // The three bidder classes exhaust competitive awards; totalAccepted also includes
+  // noncompetitive awards and may include SOMA, so it dilutes these bidder shares.
+  const competitiveAccepted = values.reduce((sum, value) => sum + value!, 0);
+  if (competitiveAccepted <= 0) return null;
+  return [...values.map(value => value! / competitiveAccepted * 100), 0];
 }
 
 export function priorResult(row: TreasuryAuction | undefined, results: TreasuryAuction[]) {

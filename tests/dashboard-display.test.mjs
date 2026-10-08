@@ -275,11 +275,15 @@ test("빈 데이터에서도 정상 렌더링하고 임의 시장금리를 만�
   assert.doesNotMatch(html, /NaN|Infinity|VERIFIED SNAPSHOT/);
 });
 
-test("배정 비중 합계는 100%, 누락 데이터는 N/A 처리", () => {
-  assert.deepEqual(awardMix(base), [60, 20, 15, 5]);
-  assert.equal(awardMix({ ...base, directAccepted: null }), null);
-  assert.equal(awardMix({ ...base, totalAccepted: 0 }), null);
-  assert.equal(awardMix({ ...base, indirectAccepted: 100e9 }), null);
+test("참여자별 낙찰 비중은 경쟁입찰 낙찰액 기준이고 누락 데이터는 N/A 처리", () => {
+  const actual = {
+    ...base, auctionDate: "2026-10-07", totalAccepted: 39_926_321_900,
+    indirectAccepted: 31_063_238_000, directAccepted: 6_618_200_000, dealerAccepted: 984_000_000,
+  };
+  assert.deepEqual(awardMix(actual)?.map(value => Number(value.toFixed(1))), [80.3, 17.1, 2.5, 0]);
+  assert.equal(awardMix({ ...actual, directAccepted: null }), null);
+  assert.equal(awardMix({ ...actual, indirectAccepted: 0, directAccepted: 0, dealerAccepted: 0 }), null);
+  assert.equal(awardMix({ ...actual, dealerAccepted: -1 }), null);
 });
 
 test("이전 결과는 같은 종류·만기, 이전 날짜만 사용", () => {
@@ -320,9 +324,9 @@ test("간접·직접·PD 직전 대비 증감은 +/−/0 %p로 표시", () => {
   const html = renderToStaticMarkup(React.createElement(Dashboard, { ...props, results: [base, previous, other] }));
   const cards = [...html.matchAll(/<article class="kpi bidder-kpi">([\s\S]*?)<\/article>/g)].map(match => visibleText(match[1]));
   assert.equal(cards.length, 3);
-  assert.match(cards[0], /간접낙찰률 60\.0% 직전 입찰 대비 \+5\.0%p/);
-  assert.match(cards[1], /직접낙찰률 20\.0% 직전 입찰 대비 -5\.0%p/);
-  assert.match(cards[2], /PD낙찰률 15\.0% 직전 입찰 대비 0\.0%p/);
+  assert.match(cards[0], /간접낙찰률 63\.2% 직전 입찰 대비 \+5\.3%p/);
+  assert.match(cards[1], /직접낙찰률 21\.1% 직전 입찰 대비 -5\.3%p/);
+  assert.match(cards[2], /PD낙찰률 15\.8% 직전 입찰 대비 0\.0%p/);
   assert.equal(percentagePointChange(60, 55), 5);
   assert.equal(percentagePointChange(60, null), null);
   assert.equal(signedPoints(-0.000001), "0.0%p");
