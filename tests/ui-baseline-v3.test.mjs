@@ -6,10 +6,8 @@ const htmlUrl = new URL("../UST_AUCTION_ui-baseline-v3.html", import.meta.url);
 
 test("v3 keeps only the auction-results top-level navigation", async () => {
   const html = await readFile(htmlUrl, "utf8");
-  const staticNavigation = html.match(/<nav class="nav" aria-label="주요 메뉴">[\s\S]*?<\/nav>/)?.[0] ?? "";
-
-  assert.match(staticNavigation, />입찰 결과<\/button>/);
-  assert.doesNotMatch(staticNavigation, /입찰 일정|QRA 공급|API 필드|데이터 구조/);
+  assert.doesNotMatch(html, /<nav class="nav" aria-label="주요 메뉴">/);
+  assert.match(html, /공식 입찰 결과를 불러오는 중입니다/);
   assert.match(html, /children:\(0,A\.jsx\)\(`button`,\{className:`active`,"aria-pressed":!0,children:`입찰 결과`\}\)/);
 });
 
@@ -37,7 +35,7 @@ test("v3 retains schedules inside auction results", async () => {
   assert.match(html, /auction-month-calendar-script/);
   assert.match(html, /입찰 완료/);
   assert.match(html, /입찰 예정/);
-  assert.match(html, /standalone-live-data\.js/);
+  assert.match(html, /id="standalone-live-data-script"/);
 });
 
 test("v3 참여자별 낙찰 비중은 경쟁입찰 낙찰액 기준으로 공식 발표와 일치", async () => {
@@ -54,4 +52,15 @@ test("v3 참여자별 낙찰 비중은 경쟁입찰 낙찰액 기준으로 공�
   });
   assert.deepEqual(mix.map(value => Number(value.toFixed(1))), [80.3, 17.1, 2.5, 0]);
   assert.match(html, /경쟁입찰 낙찰액 기준/);
+});
+
+test("v3 is a single HTML file without an August snapshot", async () => {
+  const [html, loader] = await Promise.all([
+    readFile(htmlUrl, "utf8"),
+    readFile(new URL("../standalone-live-data.js", import.meta.url), "utf8"),
+  ]);
+  assert.match(html, /미국 재무부 공식 입찰 결과를 불러오는 중입니다/);
+  assert.doesNotMatch(html, /2026-08-21|var Ae=\{upcoming:|source:`snapshot`/);
+  assert.doesNotMatch(html, /<script[^>]+src=/);
+  assert.ok(html.includes(`<script id="standalone-live-data-script">${loader}</script>`));
 });

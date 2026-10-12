@@ -5,6 +5,21 @@
   const CACHE_KEY = "ust-auction-official-rows-v1";
   const REQUEST_TIMEOUT_MS = 30000;
   const MAX_ATTEMPTS = 3;
+  const MAX_CACHE_AGE_MS = 24 * 60 * 60 * 1000;
+  const VERIFIED_RESULT_PDF = "https://www.treasurydirect.gov/instit/annceresult/press/preanre/2026/R_20261007_2.pdf";
+  const VERIFIED_RESULT_VALID_FROM = Date.parse("2026-10-08T00:00:00Z");
+  const VERIFIED_RESULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+  const VERIFIED_RESULT_ROWS = [{
+    cusip: "91282CRF0", auction_date: "2026-10-07", security_type: "Note",
+    security_term: "9-Year 10-Month", original_security_term: "10-Year",
+    issue_date: "2026-10-15", maturity_date: "2036-08-15", reopening: "Yes",
+    offering_amt: "39000000000", high_yield: "5.300", int_rate: "4.625",
+    price_per100: "94.864261", bid_to_cover_ratio: "2.77", allocation_pctage: "57.60",
+    total_tendered: "108995289900", total_accepted: "39926321900",
+    primary_dealer_accepted: "984000000", direct_bidder_accepted: "6618200000",
+    indirect_bidder_accepted: "31063238000",
+  }];
+
   const FILTER_IDS = new Set(["all", "bill", "note-2", "note-3", "note-5", "note-7", "note-10", "bond-20", "bond-30", "tips", "frn"]);
   const FIELDS = [
     "record_date", "cusip", "security_type", "security_term", "original_security_term",
@@ -181,8 +196,9 @@
   function readCache(from, to) {
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+      const age = new Date().getTime() - Date.parse(cached?.retrievedAt);
       return cached?.from <= from && cached?.to >= to && Array.isArray(cached.rows) && cached.rows.length
-        && !Number.isNaN(Date.parse(cached.retrievedAt)) ? cached : null;
+        && Number.isFinite(age) && age >= 0 && age <= MAX_CACHE_AGE_MS ? cached : null;
     } catch {
       return null;
     }
@@ -269,6 +285,22 @@
         } catch {
           // Ignore invalid cache and show the explicit unavailable state below.
         }
+      }
+      const fallbackAge = retrievedAt.getTime() - VERIFIED_RESULT_VALID_FROM;
+      if (fallbackAge >= 0 && fallbackAge <= VERIFIED_RESULT_MAX_AGE_MS) {
+        const counts = renderRows(VERIFIED_RESULT_ROWS, "snapshot", retrievedAt.toISOString(), range, defaults, initialFilter, todayText, upcomingTo);
+        requestAnimationFrame(() => {
+          keepStatusVisible(
+            "snapshot", "공식 확인본",
+            `API 재조회 실패 (${reason}). 2026-10-07 10년물 공식 발표문으로 검증한 ${counts.results}건만 표시합니다. 다른 입찰의 최신 상태는 확인할 수 없습니다.`,
+          );
+          const sourceLink = document.querySelector(".terminal-shell > footer a");
+          if (sourceLink) {
+            sourceLink.href = VERIFIED_RESULT_PDF;
+            sourceLink.textContent = "미국 재무부 · 2026-10-07 입찰 결과";
+          }
+        });
+        return;
       }
       window.__UST_RENDER_AUCTIONS__({
         upcoming: [],

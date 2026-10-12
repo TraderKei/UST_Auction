@@ -53,5 +53,43 @@ for (const removedLabel of ["QRA 공급", "API 필드", "데이터 구조"]) {
   }
 }
 
+
+const rootStart = html.indexOf('<div id="root">');
+const rootEnd = html.indexOf('\n  <noscript>', rootStart);
+if (rootStart < 0 || rootEnd < 0) {
+  throw new Error("server-rendered snapshot root was not found");
+}
+html = html.slice(0, rootStart)
+  + '<div id="root"><div role="status" aria-live="polite" style="padding:24px;color:#d1be98">미국 재무부 공식 입찰 결과를 불러오는 중입니다.</div></div>'
+  + html.slice(rootEnd);
+replaceOnce(
+  "noscript message",
+  "JavaScript가 꺼져 있어 화면 조회만 가능합니다.",
+  "JavaScript를 켜야 공식 입찰 결과를 불러올 수 있습니다.",
+);
+
+const snapshotStart = html.indexOf("var Ae={upcoming:");
+const rendererStart = html.indexOf("je=document.getElementById(`root`);", snapshotStart);
+if (snapshotStart < 0 || rendererStart < 0) {
+  throw new Error("embedded August snapshot was not found");
+}
+html = html.slice(0, snapshotStart) + "var " + html.slice(rendererStart);
+replaceOnce("snapshot data assignment", "window.__UST_AUCTION_DATA__=Ae;", "");
+replaceOnce(
+  "initial snapshot render",
+  "window.__UST_AUCTION_ROOT__.render(x.createElement(ke,Ae)),",
+  "",
+);
+
+const liveLoader = await readFile(new URL("../standalone-live-data.js", import.meta.url), "utf8");
+if (liveLoader.toLowerCase().includes("</script")) {
+  throw new Error("live loader cannot be embedded safely");
+}
+replaceOnce(
+  "external live loader",
+  '<script src="./standalone-live-data.js"></script>',
+  '<script id="standalone-live-data-script">' + liveLoader + '</script>',
+);
+
 await writeFile(targetUrl, html, "utf8");
 console.log(`Created ${fileURLToPath(targetUrl)}`);

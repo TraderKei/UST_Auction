@@ -10,13 +10,13 @@ const row = (cusip, date) => ({
   bid_to_cover_ratio: "2.5", offering_amt: "1000000000",
 });
 
-async function run(fetch) {
+async function run(fetch, now = "2026-10-07T04:00:00.000Z") {
   let start;
   let rendered;
   let resolveRender;
   const finished = new Promise((resolve) => { resolveRender = resolve; });
   class FixedDate extends Date {
-    constructor(...args) { super(...(args.length ? args : ["2026-10-07T04:00:00.000Z"])); }
+    constructor(...args) { super(...(args.length ? args : [now])); }
   }
   const context = {
     AbortController, Date: FixedDate, URL, fetch, setTimeout, clearTimeout,
@@ -74,4 +74,27 @@ test("standalone loader restores dated official cache when live retrieval fails"
   assert.equal(rendered.source, "snapshot");
   assert.equal(rendered.results.length, 2);
   assert.equal(rendered.updatedAt, "2026-10-07T04:00:00.000Z");
+});
+
+test("standalone loader rejects stale August cache and shows the verified October result", async () => {
+  store.clear();
+  store.set("ust-auction-official-rows-v1", JSON.stringify({
+    from: "2022-09-07", to: "2027-01-05",
+    retrievedAt: "2026-08-21T06:30:00.000Z",
+    rows: [row("OLD", "2026-08-21")],
+  }));
+  const rendered = await run(async () => { throw new Error("network unavailable"); }, "2026-10-12T04:00:00.000Z");
+  assert.equal(rendered.source, "snapshot");
+  assert.equal(rendered.results.length, 1);
+  assert.equal(rendered.results[0].cusip, "91282CRF0");
+  assert.equal(rendered.results[0].auctionDate, "2026-10-07");
+  assert.equal(rendered.results[0].directAccepted, 6618200000);
+  assert.equal(rendered.results[0].indirectAccepted, 31063238000);
+});
+
+test("standalone loader does not show an expired verified result when offline", async () => {
+  store.clear();
+  const rendered = await run(async () => { throw new Error("network unavailable"); }, "2026-10-16T04:00:00.000Z");
+  assert.equal(rendered.source, "unavailable");
+  assert.equal(rendered.results.length, 0);
 });
