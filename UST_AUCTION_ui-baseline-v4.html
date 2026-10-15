@@ -269,21 +269,26 @@
 
   function keepStatusVisible(kind, badgeText, message) {
     const apply = () => {
+      const english = document.documentElement.lang === "en";
+      const displayText = (text) => english && window.__UST_TRANSLATE__ ? window.__UST_TRANSLATE__(text) : text;
+      const visibleBadgeText = displayText(badgeText);
+      const visibleMessage = displayText(message);
       const badge = document.querySelector(".source-badge");
       const status = document.querySelector(".data-status");
       const sourceLink = document.querySelector(".terminal-shell > footer a");
-      if (badge && (badge.textContent !== badgeText || !badge.classList.contains(kind))) {
+      if (badge && (badge.textContent !== visibleBadgeText || !badge.classList.contains(kind))) {
         badge.className = `source-badge ${kind}`;
-        badge.textContent = badgeText;
+        badge.textContent = visibleBadgeText;
       }
       if (status) {
-        status.className = `data-status ${kind}`;
+        if (!status.classList.contains(kind)) status.className = `data-status ${kind}`;
         const messageNode = Array.from(status.childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
-        if (messageNode && messageNode.nodeValue !== message) messageNode.nodeValue = message;
+        if (messageNode && messageNode.nodeValue !== visibleMessage) messageNode.nodeValue = visibleMessage;
       }
       if (kind === "live" && sourceLink) {
         if (sourceLink.href !== API) sourceLink.href = API;
-        if (sourceLink.textContent !== "미국 재무부 · Fiscal Data") sourceLink.textContent = "미국 재무부 · Fiscal Data";
+        const visibleSource = displayText("미국 재무부 · Fiscal Data");
+        if (sourceLink.textContent !== visibleSource) sourceLink.textContent = visibleSource;
       }
     };
     apply();
