@@ -1012,7 +1012,10 @@ html[data-ust-theme] .gray { background:var(--muted); }
     const current = node.nodeValue;
     let pair = originals.get(node);
     if (!pair || (current !== pair.ko && current !== pair.en)) {
-      pair = { ko: current, en: translated(current) };
+      const monthOption = node.parentElement?.matches(".calendar-month option") && /^(\d{1,2})월$/.exec(current);
+      pair = { ko: current, en: monthOption
+        ? new Date(2000, Number(monthOption[1]) - 1).toLocaleString("en-US", { month:"short" })
+        : translated(current) };
       originals.set(node, pair);
     }
     const next = state.language === "en" ? pair.en : pair.ko;
