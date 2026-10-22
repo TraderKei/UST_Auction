@@ -231,10 +231,7 @@ def build_html(snapshot: dict) -> str:
     html = replace_once(html, 'calendar.append(head, meta, weekdayRow, grid, legend, message);',
                         '''const provenance = document.createElement("p");
       provenance.className = "auction-calendar-source";
-      const info = window.__UST_TENTATIVE_INFO__;
-      if (info) {
-        provenance.textContent = `재무부 잠정 일정 · 수집 ${info.capturedAt} UTC · 공고 전 변경될 수 있습니다.`;
-      }
+      provenance.textContent = "잠정 일정은 공식 공고 전까지 변경될 수 있습니다.";
       calendar.append(head, meta, weekdayRow, grid, legend, provenance, message);''')
 
     schedule_start = html.index('q.map(i=>{let b=G(i,n)')
@@ -250,7 +247,7 @@ def build_html(snapshot: dict) -> str:
                         'className:`released ${$==="results"?"is-result":C?.tentative?"is-tentative":"is-upcoming"}`,children:$==="results"?"\\uACB0\\uACFC":C?.tentative?"\\uC7A0\\uC815":"\\uC608\\uC815"')
     note_start = html.index('a("p",{className:"schedule-note",children:[', html.index('function ve({upcoming:'))
     note_end = html.index(']}),e("div",{className:"table-wrap"', note_start)
-    note = 'a("p",{className:"schedule-note",children:["\\uAE30\\uC900 \\uC2DC\\uAC01: ",Ee.full," \\xB7 ","\\uACF5\\uACE0 \\uC77C\\uC815\\uACFC \\uC7AC\\uBB34\\uBD80 \\uC7A0\\uC815 \\uC77C\\uC815\\uC744 \\uD568\\uAED8 \\uD45C\\uC2DC\\uD569\\uB2C8\\uB2E4. \\uC7A0\\uC815 \\uC77C\\uC815\\uC740 \\uACF5\\uC2DD \\uACF5\\uACE0 \\uC804\\uAE4C\\uC9C0 \\uBCC0\\uACBD\\uB420 \\uC218 \\uC788\\uC2B5\\uB2C8\\uB2E4."'
+    note = 'a("p",{className:"schedule-note",children:["\\uAE30\\uC900 \\uC2DC\\uAC01: ",Ee.full," \\xB7 ","\\uC7A0\\uC815 \\uC77C\\uC815\\uC740 \\uACF5\\uC2DD \\uACF5\\uACE0 \\uC804\\uAE4C\\uC9C0 \\uBCC0\\uACBD\\uB420 \\uC218 \\uC788\\uC2B5\\uB2C8\\uB2E4."'
     html = html[:note_start] + note + html[note_end:]
     html = replace_once(html, "fonts, including any derivative works, can be bundled, embedded, \n",
                         "fonts, including any derivative works, can be bundled, embedded,\n")
@@ -271,7 +268,7 @@ def build_html(snapshot: dict) -> str:
         "미국 재무부 · 2026-10-07 입찰 결과": "U.S. Treasury · 2026-10-07 auction result",
         "공고된 예정 입찰": "Announced upcoming auction",
         "공고된 예정": "Announced upcoming",
-        "공고 일정과 재무부 잠정 일정을 함께 표시합니다. 잠정 일정은 공식 공고 전까지 변경될 수 있습니다.": "Announced and Treasury tentative schedules are shown together. Tentative dates may change before an official announcement.",
+        "잠정 일정은 공식 공고 전까지 변경될 수 있습니다.": "Tentative dates may change before an official announcement.",
         "잠정 일정 · 공식 공고 전": "Tentative schedule · before official announcement",
         "잠정 · 공고 확인 필요": "Tentative · check announcement",
         "재무부 잠정 일정": "Treasury tentative schedule",
@@ -297,7 +294,7 @@ def build_html(snapshot: dict) -> str:
                         "document.title = state.language === \"en\" ? \"UST AUCTION · UI Baseline v5\" : \"UST AUCTION · UI 기준 v5\";")
     html = replace_once(html, ">한국어</button>", ">{{state.language === 'ko' ? '한국어' : 'Korean'}}</button>")
     html = replace_once(html, "result = result.replace(/(\\d+)년/g, '$1Y').replace(/(\\d+)주/g, '$1W').replace(/(\\d+)건/g, '$1 items');",
-                        "result = result.replace(/(\\d+)년/g, '$1Y').replace(/(\\d+)주/g, '$1W').replace(/(\\d+)일/g, '$1D').replace(/(\\d+)건/g, '$1 items');")
+                        "result = result.replace(/(\\d+)년/g, '$1Y').replace(/(\\d+)주/g, '$1W').replace(/(\\d+)일/g, '$1D').replace(/(\\d+)건/g, '$1 items').replace(/건/g, ' items');")
     return html
 
 

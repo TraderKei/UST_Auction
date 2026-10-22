@@ -167,8 +167,12 @@ test("calendar footer has no links and the upcoming badge uses a muted color wit
   const calendar = html.match(/<script id="auction-month-calendar-script">([\s\S]*?)<\/script>/)?.[1];
   const css = html.match(/<style id="ust-v5-tentative-styles">([\s\S]*?)<\/style>/)?.[1];
   assert.ok(calendar && css);
-  assert.match(calendar, /provenance\.textContent = `재무부 잠정 일정/);
+  assert.match(calendar, /provenance\.textContent = "잠정 일정은 공식 공고 전까지 변경될 수 있습니다\."/);
   assert.doesNotMatch(calendar, /provenance\.append\(|provenance\.innerHTML|announcedLink|link\.href = info\.sourceUrl/);
+  const scheduleNote = html.match(/className:"schedule-note",children:\[([\s\S]*?)\]\}\),e\("div",\{className:"table-wrap"/)?.[1];
+  assert.ok(scheduleNote);
+  const noteStrings = [...scheduleNote.matchAll(/"(?:\\.|[^"\\])*"/g)].map(([literal]) => literal);
+  assert.equal(JSON.parse(noteStrings.at(-1)), "잠정 일정은 공식 공고 전까지 변경될 수 있습니다.");
   assert.match(css, /--ust-upcoming-swatch:#755b42/);
   assert.match(css, /--ust-upcoming-swatch:#8a6b4a/);
   assert.match(css, /\.auction-calendar-legend i\.upcoming\{background:var\(--ust-upcoming-swatch\)\}/);
@@ -184,12 +188,12 @@ test("English mode translates new calendar and acquisition messages", () => {
   const translate = new Function("entries", `${translationFunction}; return translated;`)(entries);
   for (const source of [
     "2026년 10월 · 한국 KST 기준 · 결과 12건 · 공고 4건 · 잠정 3건",
-    "재무부 잠정 일정 · 수집 2026-10-22T00:00:00 UTC · 공고 전 변경될 수 있습니다.",
+    "잠정 일정은 공식 공고 전까지 변경될 수 있습니다.",
     "미국 재무부 Fiscal Data 및 TreasuryDirect 공식 API 자료입니다. 조회 범위 2026-01-01~2026-10-22, 결과 50건, 공고 5건, 잠정 20건.",
-    "공고 일정과 재무부 잠정 일정을 함께 표시합니다. 잠정 일정은 공식 공고 전까지 변경될 수 있습니다.",
     "잠정 · 공고 확인 필요",
     "4주 단기채 잠정을 선택했습니다.",
   ]) assert.doesNotMatch(translate(source), /[가-힣]/, source);
+  assert.equal(translate("건"), " items");
   const dashboard = html.match(/<script id="ust-vue-dashboard-runtime">([\s\S]*?)<\/script>/)?.[1];
   assert.ok(dashboard);
   for (const [, literal] of dashboard.matchAll(/("(?:\\.|[^"\\])*")/g)) {
