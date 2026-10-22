@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "UST_AUCTION_ui-baseline-v4.html"
 OUTPUT = ROOT / "UST_AUCTION_ui-baseline-v5.html"
 MERGER = ROOT / "scripts" / "tentative_schedule_v1.js"
+RESULTS_EXPORTER = ROOT / "scripts" / "results_excel_v1.js"
 FIXTURES = ROOT / "tests_pipeline" / "fixtures"
 SOURCE_PAGE = "https://home.treasury.gov/policy-issues/financing-the-government/treasury-marketable-and-non-marketable-securities"
 ANNOUNCEMENTS_API = "https://www.treasurydirect.gov/TA_WS/securities/upcoming?format=json"
@@ -131,6 +132,9 @@ def build_html(snapshot: dict) -> str:
                         '<title>UST AUCTION · UI Baseline v5</title>')
     data = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     merger = MERGER.read_text(encoding="utf-8")
+    results_exporter = RESULTS_EXPORTER.read_text(encoding="utf-8")
+    html = replace_once(html, '<script id="ust-vue-dashboard-runtime">',
+                        f'<script id="ust-results-excel-v1">{results_exporter}</script>\n<script id="ust-vue-dashboard-runtime">')
     insertion = (f'<script type="application/json" id="ust-tentative-schedule-v1">{data}</script>\n'
                  f'<script id="ust-tentative-merger-v1">{merger}</script>\n'
                  '<style id="ust-v5-tentative-styles">\n'
@@ -147,6 +151,9 @@ def build_html(snapshot: dict) -> str:
                  '.auction-calendar-source{font-size:9px;line-height:1.5;color:var(--muted)}\n'
                  ':root .auction-month-calendar .auction-calendar-source,:root .auction-month-calendar .auction-calendar-message{margin:0}\n'
                  ':root .auction-month-calendar .auction-calendar-message{margin-top:-6px}\n'
+                 ':root .date-range-form .results-export{width:30px;height:30px;flex:0 0 30px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:1px solid var(--ce-border2);border-radius:4px;background:var(--panel);cursor:pointer}\n'
+                 ':root .date-range-form .results-export:hover{border-color:#217346;background:var(--ce-hover)}\n'
+                 ':root .date-range-form .results-export:focus-visible{outline:2px solid #217346;outline-offset:2px}\n'
                  '</style>\n')
     html = replace_once(html, '<script id="standalone-live-data-script">', insertion + '<script id="standalone-live-data-script">')
 
@@ -250,6 +257,12 @@ def build_html(snapshot: dict) -> str:
     html = html[:schedule_start] + schedule + html[schedule_end:]
     html = replace_once(html, 'className:"released",children:$==="results"?"\\uACB0\\uACFC":"\\uC608\\uC815"',
                         'className:`released ${$==="results"?"is-result":C?.tentative?"is-tentative":"is-upcoming"}`,children:$==="results"?"\\uACB0\\uACFC":C?.tentative?"\\uC7A0\\uC815":"\\uC608\\uC815"')
+    html = replace_once(html,
+                        'className:"date-range-form",onSubmit:rt,noValidate:!0,children:[a("label"',
+                        'className:"date-range-form",onSubmit:rt,noValidate:!0,children:[e("button",{type:"button",className:"results-export","aria-label":"최근 입찰 결과 엑셀 다운로드",title:"최근 입찰 결과 엑셀 다운로드",onClick:()=>window.__UST_RESULTS_EXCEL_V1__.download(),dangerouslySetInnerHTML:{__html:window.__UST_RESULTS_EXCEL_V1__.icon}}),a("label"')
+    html = replace_once(html,
+                        ',e("span",{children:s==="snapshot"?"\\uD45C\\uBCF8 \\uAE30\\uC900 \\uC608\\uC815 \\xB7 \\uCD5C\\uC2E0 \\uC77C\\uC815 \\uBBF8\\uD655\\uC778":"\\uC790\\uB8CC \\uAE30\\uC900 \\uC2DC\\uAC01 \\uC774\\uD6C4 \\uC608\\uC815"})',
+                        '')
     note_start = html.index('a("p",{className:"schedule-note",children:[', html.index('function ve({upcoming:'))
     note_end = html.index(']}),e("div",{className:"table-wrap"', note_start)
     note = 'a("p",{className:"schedule-note",children:["\\uC7A0\\uC815 \\uC77C\\uC815\\uC740 \\uACF5\\uC2DD \\uACF5\\uACE0 \\uC804\\uAE4C\\uC9C0 \\uBCC0\\uACBD\\uB420 \\uC218 \\uC788\\uC2B5\\uB2C8\\uB2E4."'
@@ -272,6 +285,7 @@ def build_html(snapshot: dict) -> str:
         "미국 재무부 Fiscal Data 및 TreasuryDirect 공식 API 자료입니다.": "Data from the U.S. Treasury Fiscal Data and TreasuryDirect official APIs.",
         "조회 범위": "Query range",
         "응찰률": "Bid-to-cover",
+        "최근 입찰 결과 엑셀 다운로드": "Download recent auction results as Excel",
         "공식 Fiscal Data API 수신에 실패했습니다.": "Could not fetch the official Fiscal Data API.",
         "공식 API 재조회 실패": "Official API refresh failed",
         "API 재조회 실패": "API refresh failed",

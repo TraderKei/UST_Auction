@@ -148,6 +148,11 @@ test("v5 script, labels, and offline schedule path are connected", () => {
   assert.match(html, /const tentativeCount = datedEvents\.filter/);
   assert.match(html, /className:"tentative-badge"/);
   assert.match(html, /excludeBills: false/);
+  assert.match(html, /<script id="ust-results-excel-v1">/);
+  assert.ok(html.indexOf('<script id="ust-results-excel-v1">') < html.indexOf('<script id="ust-vue-dashboard-runtime">'));
+  assert.match(html, /className:"date-range-form"[^\n]*?children:\[e\("button",\{type:"button",className:"results-export"/);
+  assert.match(html, /onClick:\(\)=>window\.__UST_RESULTS_EXCEL_V1__\.download\(\)/);
+  assert.doesNotMatch(html, /"\\uC790\\uB8CC \\uAE30\\uC900 \\uC2DC\\uAC01 \\uC774\\uD6C4 \\uC608\\uC815"/);
 });
 
 test("tentative calendar events use the same color as the legend in every theme", () => {
@@ -243,6 +248,16 @@ test("TreasuryDirect announcement supersedes 22 October tentative 4W without dup
   assert.equal(deduped.find((row) => row.security_term === "4-Week")?.offering_amt, "111000000000");
   const placeholder = { ...snapshot.announcedRows.find((row) => row.securityTerm === "4-Week"), treasuryOfferingAnnouncementPressReleaseFileName: "" };
   assert.equal(augment([], [placeholder], "2026-10-22", "2027-01-20").length, 0);
+});
+
+test("22 October 10-day cash management bill is officially marked as a reopening", () => {
+  const snapshot = JSON.parse(snapshotText);
+  const bill = snapshot.announcedRows.find((row) => row.cusip === "912797UM7");
+  assert.equal(bill?.competitiveAuctionCloseDate, "2026-10-22T00:00:00");
+  assert.equal(bill?.securityTerm, "10-Day");
+  assert.equal(bill?.originalSecurityTerm, "26-Week");
+  assert.equal(bill?.reopening, "Yes");
+  assert.equal(bill?.cashManagementBill, "Yes");
 });
 
 test("live TreasuryDirect response replaces the embedded announcement snapshot", async () => {
