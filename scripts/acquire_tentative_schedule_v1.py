@@ -142,6 +142,17 @@ def build_html(snapshot: dict) -> str:
                         'event.status === "upcoming" ? " is-upcoming" : event.status === "tentative" ? " is-tentative" : ""')
     html = replace_once(html, 'event.status === "result" ? "입찰 결과" : "예정 입찰"',
                         'event.status === "result" ? "입찰 결과" : event.status === "tentative" ? event.auction.tentativeUnconfirmed ? "잠정 · 공고 확인 필요" : "잠정 일정 · 공식 공고 전" : "공고된 예정 입찰"')
+    html = replace_once(html, '''          row = [...rows].find((candidate) => {
+            const cells = candidate.querySelectorAll("td");
+            return cells.length > 1 && cells[1].textContent.includes(visibleLabel) && candidate.querySelector("button.row-select")?.getAttribute("aria-label")?.includes(event.auction.cusip || event.auction.auctionDate);
+          });
+          if (!row) row = [...rows].find((candidate) => candidate.querySelectorAll("td")[1]?.textContent.includes(visibleLabel));''',
+                        '''          const key = `${event.auction.cusip}-${event.auction.auctionDate}`;
+          row = [...rows].find((candidate) =>
+            candidate.querySelector("button.row-select")?.getAttribute("data-auction-key") === key);''')
+    html = replace_once(html, '        const visibleLabel = window.__UST_TRANSLATE__ && document.documentElement.lang === "en" ? window.__UST_TRANSLATE__(label) : label;\n', '')
+    html = replace_once(html, 'event.status === "result" ? "결과" : "예정"}을 선택했습니다.',
+                        'event.status === "result" ? "결과" : event.status === "tentative" ? "잠정" : "예정"}을 선택했습니다.')
     html = replace_once(html, 'scheduled.innerHTML = \'<i class="upcoming"></i>입찰 예정\';\n      legend.append(completed, scheduled);',
                         'scheduled.innerHTML = \'<i class="upcoming"></i>공고된 예정\';\n      const tentativeLegend = document.createElement("span");\n      tentativeLegend.innerHTML = \'<i class="tentative"></i>잠정 일정\';\n      legend.append(completed, scheduled, tentativeLegend);')
     html = replace_once(html, 'calendar.append(head, meta, weekdayRow, grid, legend, message);',
@@ -161,9 +172,14 @@ def build_html(snapshot: dict) -> str:
     schedule_start = html.index('q.map(i=>{let b=G(i,n)')
     schedule_end = html.index('!q.length', schedule_start)
     schedule = replace_once(html[schedule_start:schedule_end],
+                            'e("button",{className:"row-select","aria-label":',
+                            'e("button",{className:"row-select","data-auction-key":F(i),"aria-label":')
+    schedule = replace_once(schedule,
                             'a("td",{children:[D(i)," ",i.reopening&&e("span",{className:"reopen-badge"',
                             'a("td",{children:[D(i)," ",i.tentative&&e("span",{className:"tentative-badge",children:i.tentativeUnconfirmed?"\\uACF5\\uACE0 \\uD655\\uC778 \\uD544\\uC694":"\\uC7A0\\uC815"}),i.reopening&&e("span",{className:"reopen-badge"')
     html = html[:schedule_start] + schedule + html[schedule_end:]
+    html = replace_once(html, 'className:"released",children:$==="results"?"\\uACB0\\uACFC":"\\uC608\\uC815"',
+                        'className:"released",children:$==="results"?"\\uACB0\\uACFC":C?.tentative?"\\uC7A0\\uC815":"\\uC608\\uC815"')
     note_start = html.index('a("p",{className:"schedule-note",children:[', html.index('function ve({upcoming:'))
     note_end = html.index(']}),e("div",{className:"table-wrap"', note_start)
     note = 'a("p",{className:"schedule-note",children:["\\uAE30\\uC900 \\uC2DC\\uAC01: ",Ee.full," \\xB7 ","\\uACF5\\uACE0 \\uC77C\\uC815\\uACFC \\uC7AC\\uBB34\\uBD80 \\uC7A0\\uC815 \\uC77C\\uC815\\uC744 \\uD568\\uAED8 \\uD45C\\uC2DC\\uD569\\uB2C8\\uB2E4. \\uC7A0\\uC815 \\uC77C\\uC815\\uC740 \\uACF5\\uC2DD \\uACF5\\uACE0 \\uC804\\uAE4C\\uC9C0 \\uBCC0\\uACBD\\uB420 \\uC218 \\uC788\\uC2B5\\uB2C8\\uB2E4."'

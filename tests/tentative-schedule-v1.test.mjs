@@ -150,3 +150,42 @@ test("tentative calendar events use the same color as the legend in every theme"
   assert.match(css, /:root \.auction-month-calendar \.auction-calendar-event\.is-tentative\{[^}]*background:var\(--ust-tentative-color\)/);
   assert.match(css, /\.auction-calendar-legend i\.tentative\{background:var\(--ust-tentative-color\)\}/);
 });
+
+test("selecting October 29 tentative 4W does not select October 22 4W", () => {
+  const start = html.indexOf("    function findAndSelect(event, message) {");
+  const end = html.indexOf("    function render() {", start);
+  const selectSource = start >= 0 && end > start ? html.slice(start, end).trim() : "";
+  assert.ok(selectSource);
+  assert.match(html, /"data-auction-key":F\(i\)/);
+
+  const { __UST_MERGE_TENTATIVE__: merge } = merger();
+  const upcoming = merge([], [], "2026-10-22", "2027-01-20");
+  const october22 = upcoming.find((row) => row.auctionDate === "2026-10-22" && row.term === "4-Week");
+  const october29 = upcoming.find((row) => row.auctionDate === "2026-10-29" && row.term === "4-Week");
+  assert.ok(october22 && october29);
+  const clicks = [];
+  const rows = [october22, october29].map((auction) => ({
+    querySelector: () => ({
+      getAttribute: (name) => name === "data-auction-key" ? `${auction.cusip}-${auction.auctionDate}` : null,
+      click: () => clicks.push(auction.auctionDate),
+    }),
+  }));
+  const state = { selectedKey: "" };
+  const message = { textContent: "" };
+  const context = {
+    event: { auction: october29, status: "tentative", display: { full: "2026-10-29 · 원문 ET" } },
+    message, state, window: {}, document: { querySelectorAll: () => rows },
+    koreanTerm: () => "4주 단기채",
+    auctionKey: (auction, status) => `${status}|${auction.cusip}|${auction.auctionDate}`,
+    render: () => {},
+  };
+  vm.runInNewContext(`${selectSource}\nfindAndSelect(event, message);`, context);
+  assert.deepEqual(clicks, ["2026-10-29"]);
+  assert.match(message.textContent, /2026-10-29.*잠정/);
+  assert.match(state.selectedKey, /2026-10-29/);
+
+  context.event = { ...context.event, auction: { ...october29, cusip: "unmatched" } };
+  vm.runInNewContext(`${selectSource}\nfindAndSelect(event, message);`, context);
+  assert.deepEqual(clicks, ["2026-10-29"]);
+  assert.match(message.textContent, /찾지 못했습니다/);
+});
