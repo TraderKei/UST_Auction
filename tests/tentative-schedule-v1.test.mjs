@@ -8,11 +8,11 @@ const v4 = await readFile(new URL("../UST_AUCTION_ui-baseline-v4.html", import.m
 const source = await readFile(new URL("../scripts/tentative_schedule_v1.js", import.meta.url), "utf8");
 const snapshotText = html.match(/<script type="application\/json" id="ust-tentative-schedule-v1">([^<]*)<\/script>/)?.[1];
 
-function merger() {
+function merger(documentOverride) {
   const window = {};
   vm.runInNewContext(source, {
-    document: { getElementById: () => ({ textContent: snapshotText }) },
-    window,
+    document: documentOverride || { getElementById: () => ({ textContent: snapshotText }) },
+    window, Date, setTimeout, clearTimeout,
   });
   return window;
 }
@@ -51,6 +51,7 @@ test("v5 embeds a sourced Treasury XML snapshot and preserves v4 as a separate v
   assert.ok(snapshot.rows.some((row) => row.auctionDate === "2026-11-30" && row.type === "BILL"));
   assert.ok(!v4.includes('id="ust-tentative-schedule-v1"'));
   assert.ok(html.includes('id="ust-tentative-schedule-v1"'));
+  assert.match(html, /<title>UST AUCTION · UI Baseline v5<\/title>/);
 });
 
 test("official announcement or result replaces the matching tentative event", () => {
@@ -120,15 +121,20 @@ test("the v5 live loader supplies announced and remaining tentative rows togethe
   assert.equal(rendered.results.length, 1);
   assert.ok(rendered.upcoming.some((row) => row.cusip === "ANNOUNCED"));
   assert.ok(rendered.upcoming.some((row) => row.tentative && row.auctionDate === "2026-11-19"));
+  const bill = rendered.upcoming.find((row) => row.auctionDate === "2026-10-22" && row.type === "Bill" && row.term === "4-Week");
+  assert.equal(bill?.offeringAmount, 110000000000);
+  assert.equal(bill?.closingTimeCompetitive, "11:30 AM");
+  assert.equal(bill?.tentative, undefined);
   assert.equal(rendered.upcoming.filter((row) => row.auctionDate === "2026-10-26" && row.type === "Note" && row.term === "2-Year").length, 1);
 });
 
-test("a failed Fiscal API keeps only the dated tentative schedule", async () => {
+test("a failed Fiscal API retains verified TreasuryDirect announcements and tentative rows", async () => {
   const rendered = await runLoader(async () => { throw new Error("offline"); });
   assert.equal(rendered.source, "unavailable");
   assert.equal(rendered.results.length, 0);
   assert.ok(rendered.upcoming.length > 20);
-  assert.ok(rendered.upcoming.every((row) => row.tentative));
+  assert.ok(rendered.upcoming.some((row) => row.auctionDate === "2026-10-22" && row.term === "4-Week" && row.offeringAmount === 110000000000 && !row.tentative));
+  assert.ok(rendered.upcoming.some((row) => row.tentative));
 });
 
 test("v5 script, labels, and offline schedule path are connected", () => {
@@ -136,7 +142,8 @@ test("v5 script, labels, and offline schedule path are connected", () => {
     assert.doesNotThrow(() => new Function(script), id);
   }
   assert.match(html, /window\.__UST_MERGE_TENTATIVE__\(rows, officialUpcoming, todayText, upcomingTo\)/);
-  assert.match(html, /upcoming: window\.__UST_MERGE_TENTATIVE__\(\[\], \[\], todayText, upcomingTo\)/);
+  assert.match(html, /upcoming: window\.__UST_MERGE_TENTATIVE__\(announced, announced\.map\(normalize\), todayText, upcomingTo\)/);
+  assert.match(html, /window\.__UST_AUGMENT_OFFICIAL__\(fiscalRows, treasuryDirectRows, todayText, upcomingTo\)/);
   assert.match(html, /status: auction\.tentative \? "tentative" : "upcoming"/);
   assert.match(html, /const tentativeCount = datedEvents\.filter/);
   assert.match(html, /className:"tentative-badge"/);
@@ -146,9 +153,49 @@ test("v5 script, labels, and offline schedule path are connected", () => {
 test("tentative calendar events use the same color as the legend in every theme", () => {
   const css = html.match(/<style id="ust-v5-tentative-styles">([\s\S]*?)<\/style>/)?.[1];
   assert.ok(css);
-  assert.match(css, /\.auction-month-calendar\{--ust-tentative-color:#76529b\}/);
+  assert.match(css, /:root\{--ust-tentative-color:#3b4650/);
+  assert.match(css, /html\[data-ust-theme="light"\]\{--ust-tentative-color:#e3e8ed/);
   assert.match(css, /:root \.auction-month-calendar \.auction-calendar-event\.is-tentative\{[^}]*background:var\(--ust-tentative-color\)/);
   assert.match(css, /\.auction-calendar-legend i\.tentative\{background:var\(--ust-tentative-color\)\}/);
+  assert.match(css, /\.released\.is-result\{background:#245c91/);
+  assert.match(css, /\.released\.is-upcoming\{background:var\(--ust-upcoming-swatch\)/);
+  assert.match(css, /\.released\.is-tentative\{background:var\(--ust-tentative-color\)/);
+  assert.match(html, /className:`released \$\{\$==="results"\?"is-result":C\?\.tentative\?"is-tentative":"is-upcoming"\}`/);
+});
+
+test("TreasuryDirect announcement supersedes 22 October tentative 4W without duplicating Fiscal Data", () => {
+  const snapshot = JSON.parse(snapshotText);
+  const { __UST_AUGMENT_OFFICIAL__: augment, __UST_MERGE_TENTATIVE__: merge } = merger();
+  const rows = augment([], snapshot.announcedRows, "2026-10-22", "2027-01-20");
+  const bill = rows.find((row) => row.auction_date === "2026-10-22" && row.security_term === "4-Week");
+  assert.equal(bill?.offering_amt, "110000000000");
+  assert.equal(bill?.announcemt_date, "2026-10-20");
+  const upcoming = merge(rows, rows.map((row) => ({ auctionDate: row.auction_date, type: "Bill", term: row.security_term, cusip: row.cusip })), "2026-10-22", "2027-01-20");
+  assert.ok(!upcoming.some((row) => row.auctionDate === "2026-10-22" && row.term === "4-Week" && row.tentative));
+  const fiscal = { ...bill, offering_amt: "111000000000" };
+  const deduped = augment([fiscal], snapshot.announcedRows, "2026-10-22", "2027-01-20");
+  assert.equal(deduped.filter((row) => row.auction_date === "2026-10-22" && row.security_term === "4-Week").length, 1);
+  assert.equal(deduped.find((row) => row.security_term === "4-Week")?.offering_amt, "111000000000");
+  const placeholder = { ...snapshot.announcedRows.find((row) => row.securityTerm === "4-Week"), treasuryOfferingAnnouncementPressReleaseFileName: "" };
+  assert.equal(augment([], [placeholder], "2026-10-22", "2027-01-20").length, 0);
+});
+
+test("live TreasuryDirect response replaces the embedded announcement snapshot", async () => {
+  let deliver;
+  const document = {
+    getElementById: () => ({ textContent: snapshotText }),
+    createElement: () => ({ remove() {} }),
+    head: { appendChild: (script) => deliver(script) },
+  };
+  const window = merger(document);
+  const latest = { ...JSON.parse(snapshotText).announcedRows.find((row) => row.securityTerm === "4-Week"), offeringAmount: "111000000000" };
+  deliver = (script) => {
+    const callback = new URL(script.src).searchParams.get("callback");
+    window[callback]([latest]);
+  };
+  assert.equal((await window.__UST_LOAD_OFFICIAL_ANNOUNCEMENTS__())[0].offeringAmount, "111000000000");
+  deliver = (script) => script.onerror();
+  assert.ok((await window.__UST_LOAD_OFFICIAL_ANNOUNCEMENTS__()).some((row) => row.securityTerm === "4-Week" && row.offeringAmount === "110000000000"));
 });
 
 test("selecting October 29 tentative 4W does not select October 22 4W", () => {

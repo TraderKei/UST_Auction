@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -25,6 +26,13 @@ OUTPUT = ROOT / "UST_AUCTION_ui-baseline-v5.html"
 MERGER = ROOT / "scripts" / "tentative_schedule_v1.js"
 FIXTURES = ROOT / "tests_pipeline" / "fixtures"
 SOURCE_PAGE = "https://home.treasury.gov/policy-issues/financing-the-government/treasury-marketable-and-non-marketable-securities"
+ANNOUNCEMENTS_API = "https://www.treasurydirect.gov/TA_WS/securities/upcoming?format=json"
+ANNOUNCEMENT_FIELDS = (
+    "cusip", "securityType", "type", "securityTerm", "originalSecurityTerm",
+    "announcementDate", "competitiveAuctionCloseDate", "competitiveAuctionCloseTime",
+    "issueDate", "maturityDate", "offeringAmount", "reopening", "cashManagementBill",
+    "treasuryOfferingAnnouncementPressReleaseFileName", "floatingRate", "inflationProtected",
+)
 
 
 def replace_once(text: str, before: str, after: str) -> str:
@@ -89,17 +97,52 @@ def snapshot_from_xml(content: bytes, url: str, captured_at: str) -> dict:
     }
 
 
+def announced_rows_from_treasury_direct(rows: list[dict]) -> list[dict]:
+    announced = []
+    for row in rows:
+        pdf = str(row.get("treasuryOfferingAnnouncementPressReleaseFileName") or "")
+        if not pdf:
+            continue  # TreasuryDirect also returns unannounced placeholders.
+        if not re.fullmatch(r"A_\d{8}_\d+\.pdf", pdf):
+            raise ValueError(f"Unexpected TreasuryDirect announcement file: {pdf}")
+        auction_date = str(row.get("competitiveAuctionCloseDate") or "")[:10]
+        announcement_date = str(row.get("announcementDate") or "")[:10]
+        if not all((row.get("cusip"), row.get("securityTerm"), auction_date, announcement_date)):
+            raise ValueError("TreasuryDirect announced auction lacks an identity or date")
+        if datetime.fromisoformat(announcement_date).date() > datetime.fromisoformat(auction_date).date():
+            raise ValueError("TreasuryDirect announcement follows its auction")
+        if float(row.get("offeringAmount") or 0) <= 0:
+            raise ValueError("TreasuryDirect announced auction lacks an offering amount")
+        announced.append({field: row.get(field) or "" for field in ANNOUNCEMENT_FIELDS})
+    return announced
+
+
+def fetch_announced_rows() -> list[dict]:
+    with TreasuryHttpClient(user_agent="UST-Auction/1.0", allowed_hosts={"www.treasurydirect.gov"}) as client:
+        payload = client.get(ANNOUNCEMENTS_API).json()
+    if not isinstance(payload, list):
+        raise ValueError("TreasuryDirect upcoming auctions did not return a list")
+    return announced_rows_from_treasury_direct(payload)
+
+
 def build_html(snapshot: dict) -> str:
     html = BASELINE.read_text(encoding="utf-8")
+    html = replace_once(html, '<title>UST AUCTION · UI Baseline v4</title>',
+                        '<title>UST AUCTION · UI Baseline v5</title>')
     data = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     merger = MERGER.read_text(encoding="utf-8")
     insertion = (f'<script type="application/json" id="ust-tentative-schedule-v1">{data}</script>\n'
                  f'<script id="ust-tentative-merger-v1">{merger}</script>\n'
                  '<style id="ust-v5-tentative-styles">\n'
-                 '.tentative-badge{display:inline-block;margin-left:5px;padding:1px 4px;border:1px solid #ac84c8;border-radius:3px;color:#e5c6ff;font-size:9px;white-space:nowrap}\n'
-                 '.auction-month-calendar{--ust-tentative-color:#76529b}\n'
-                 ':root .auction-month-calendar .auction-calendar-event.is-tentative{border-color:#ad83c8;background:var(--ust-tentative-color);color:#fff}\n'
+                 ':root{--ust-tentative-color:#3b4650;--ust-tentative-text:#e9eef2;--ust-tentative-border:#788895;--ust-upcoming-swatch:#ff8e0a}\n'
+                 'html[data-ust-theme="light"]{--ust-tentative-color:#e3e8ed;--ust-tentative-text:#35424e;--ust-tentative-border:#8b98a4;--ust-upcoming-swatch:#ed6d1e}\n'
+                 '.tentative-badge{display:inline-block;margin-left:5px;padding:1px 4px;border:1px solid var(--ust-tentative-border);border-radius:3px;color:var(--ust-tentative-text);font-size:9px;white-space:nowrap}\n'
+                 ':root .auction-month-calendar .auction-calendar-event.is-tentative{border-color:var(--ust-tentative-border);background:var(--ust-tentative-color);color:var(--ust-tentative-text)}\n'
                  '.auction-calendar-legend i.tentative{background:var(--ust-tentative-color)}\n'
+                 'html[data-ust-theme="light"] .auction-calendar-legend i.tentative{border:1px solid var(--ust-tentative-border)}\n'
+                 ':root .latest-panel .released.is-result{background:#245c91;color:#fff;border:1px solid #245c91}\n'
+                 ':root .latest-panel .released.is-upcoming{background:var(--ust-upcoming-swatch);color:#242424;border:1px solid var(--ust-upcoming-swatch)}\n'
+                 ':root .latest-panel .released.is-tentative{background:var(--ust-tentative-color);color:var(--ust-tentative-text);border:1px solid var(--ust-tentative-border)}\n'
                  '.auction-calendar-source{font-size:9px;line-height:1.5;color:var(--muted)}\n'
                  '.auction-calendar-source a{color:#a8cfff;text-decoration:underline}\n'
                  '</style>\n')
@@ -115,17 +158,47 @@ def build_html(snapshot: dict) -> str:
       .filter((row) => row.auctionDate >= todayText && row.auctionDate <= upcomingTo && row.bidToCover === null);
     const upcoming = window.__UST_MERGE_TENTATIVE__(rows, officialUpcoming, todayText, upcomingTo);'''
     html = replace_once(html, official, merged)
+    html = replace_once(html, '''      const rows = await fetchRows(from, to);
+      const counts = renderRows(rows, "live", retrievedAt.toISOString(), range, defaults, initialFilter, todayText, upcomingTo);
+      saveCache(from, to, rows, retrievedAt);''',
+                        '''      const fiscalRows = await fetchRows(from, to);
+      const treasuryDirectRows = await treasuryDirectPromise;
+      const rows = window.__UST_AUGMENT_OFFICIAL__(fiscalRows, treasuryDirectRows, todayText, upcomingTo);
+      const counts = renderRows(rows, "live", retrievedAt.toISOString(), range, defaults, initialFilter, todayText, upcomingTo);
+      saveCache(from, to, fiscalRows, retrievedAt);''')
+    html = replace_once(html, '    try {\n      const fiscalRows = await fetchRows(from, to);',
+                        '    const treasuryDirectPromise = window.__UST_LOAD_OFFICIAL_ANNOUNCEMENTS__();\n\n    try {\n      const fiscalRows = await fetchRows(from, to);')
+    html = replace_once(html, '''    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);''',
+                        '''    } catch (error) {
+      const treasuryDirectRows = await treasuryDirectPromise;
+      const reason = error instanceof Error ? error.message : String(error);''')
+    html = replace_once(html, 'renderRows(cached.rows, "snapshot", cached.retrievedAt, range, defaults, initialFilter, todayText, upcomingTo)',
+                        'renderRows(window.__UST_AUGMENT_OFFICIAL__(cached.rows, treasuryDirectRows, todayText, upcomingTo), "snapshot", cached.retrievedAt, range, defaults, initialFilter, todayText, upcomingTo)')
+    html = replace_once(html, 'renderRows(VERIFIED_RESULT_ROWS, "snapshot", retrievedAt.toISOString(), range, defaults, initialFilter, todayText, upcomingTo)',
+                        'renderRows(window.__UST_AUGMENT_OFFICIAL__(VERIFIED_RESULT_ROWS, treasuryDirectRows, todayText, upcomingTo), "snapshot", retrievedAt.toISOString(), range, defaults, initialFilter, todayText, upcomingTo)')
     html = replace_once(html, 'return { results: results.length, upcoming: upcoming.length };',
                         'return { results: results.length, upcoming: officialUpcoming.length, tentative: upcoming.length - officialUpcoming.length };')
     old_count = '결과 ${counts.results}건, 예정 ${counts.upcoming}건.'
     if html.count(old_count) != 2:
         raise ValueError("Expected two live/cache status messages in v4")
     html = html.replace(old_count, '결과 ${counts.results}건, 공고 ${counts.upcoming}건, 잠정 ${counts.tentative}건.')
+    html = html.replace('미국 재무부 Fiscal Data 공식 API 자료입니다.', '미국 재무부 Fiscal Data 및 TreasuryDirect 공식 API 자료입니다.')
+    html = replace_once(html, 'Data from the U.S. Treasury Fiscal Data official API.',
+                        'Data from the U.S. Treasury Fiscal Data and TreasuryDirect official APIs.')
     html = replace_once(html, 'upcoming: [],\n        results: [],\n        source: "unavailable",',
-                        'upcoming: window.__UST_MERGE_TENTATIVE__([], [], todayText, upcomingTo),\n        results: [],\n        source: "unavailable",')
+                        'upcoming: window.__UST_MERGE_TENTATIVE__(announced, announced.map(normalize), todayText, upcomingTo),\n        results: [],\n        source: "unavailable",')
+    html = replace_once(html, '      window.__UST_RENDER_AUCTIONS__({\n        upcoming: window.__UST_MERGE_TENTATIVE__(announced,',
+                        '      const announced = window.__UST_AUGMENT_OFFICIAL__([], treasuryDirectRows, todayText, upcomingTo);\n      window.__UST_RENDER_AUCTIONS__({\n        upcoming: window.__UST_MERGE_TENTATIVE__(announced,')
 
     html = replace_once(html, 'const state = { data: null, zone: null, year: null, month: null, selectedKey: "", excludeBills: true };',
                         'const state = { data: null, zone: null, year: null, month: null, selectedKey: "", excludeBills: false };')
+    html = replace_once(html, 'if (auction.type === "Bill") return `${amount}주 단기채`;',
+                        'if (auction.type === "Bill") return `${amount}${String(auction.term || auction.securityTerm).includes("Day") ? "일" : "주"} 단기채`;')
+    html = replace_once(html, 'if (auction.type === "Bill") return `${amount}W`;',
+                        'if (auction.type === "Bill") return `${amount}${String(auction.term || auction.securityTerm).includes("Day") ? "D" : "W"}`;')
+    html = replace_once(html, 'pe=t=>t.replace(/-Year(s)?/gi,"\\uB144").replace(/-Week(s)?/gi,"\\uC8FC").replace(/-Month(s)?/gi,"\\uAC1C\\uC6D4")',
+                        'pe=t=>t.replace(/-Year(s)?/gi,"\\uB144").replace(/-Week(s)?/gi,"\\uC8FC").replace(/-Month(s)?/gi,"\\uAC1C\\uC6D4").replace(/-Day(s)?/gi,"\\uC77C")')
     html = replace_once(html, '.map((auction) => ({ auction, status: "upcoming" }));',
                         '.map((auction) => ({ auction, status: auction.tentative ? "tentative" : "upcoming" }));')
     html = replace_once(html, '''const latest = events.at(-1)?.display.date.slice(0, 7);
@@ -166,6 +239,14 @@ def build_html(snapshot: dict) -> str:
         link.rel = "noreferrer";
         link.textContent = "재무부 잠정 일정 원문";
         provenance.append(link, document.createTextNode(` · 수집 ${info.capturedAt} UTC · 잠정 일정은 공고 전 변경될 수 있습니다.`));
+        if (info.announcementSourceUrl) {
+          const announcedLink = document.createElement("a");
+          announcedLink.href = info.announcementSourceUrl;
+          announcedLink.target = "_blank";
+          announcedLink.rel = "noreferrer";
+          announcedLink.textContent = "TreasuryDirect 공식 공고";
+          provenance.append(document.createTextNode(" · "), announcedLink);
+        }
       }
       calendar.append(head, meta, weekdayRow, grid, legend, provenance, message);''')
 
@@ -179,7 +260,7 @@ def build_html(snapshot: dict) -> str:
                             'a("td",{children:[D(i)," ",i.tentative&&e("span",{className:"tentative-badge",children:i.tentativeUnconfirmed?"\\uACF5\\uACE0 \\uD655\\uC778 \\uD544\\uC694":"\\uC7A0\\uC815"}),i.reopening&&e("span",{className:"reopen-badge"')
     html = html[:schedule_start] + schedule + html[schedule_end:]
     html = replace_once(html, 'className:"released",children:$==="results"?"\\uACB0\\uACFC":"\\uC608\\uC815"',
-                        'className:"released",children:$==="results"?"\\uACB0\\uACFC":C?.tentative?"\\uC7A0\\uC815":"\\uC608\\uC815"')
+                        'className:`released ${$==="results"?"is-result":C?.tentative?"is-tentative":"is-upcoming"}`,children:$==="results"?"\\uACB0\\uACFC":C?.tentative?"\\uC7A0\\uC815":"\\uC608\\uC815"')
     note_start = html.index('a("p",{className:"schedule-note",children:[', html.index('function ve({upcoming:'))
     note_end = html.index(']}),e("div",{className:"table-wrap"', note_start)
     note = 'a("p",{className:"schedule-note",children:["\\uAE30\\uC900 \\uC2DC\\uAC01: ",Ee.full," \\xB7 ","\\uACF5\\uACE0 \\uC77C\\uC815\\uACFC \\uC7AC\\uBB34\\uBD80 \\uC7A0\\uC815 \\uC77C\\uC815\\uC744 \\uD568\\uAED8 \\uD45C\\uC2DC\\uD569\\uB2C8\\uB2E4. \\uC7A0\\uC815 \\uC77C\\uC815\\uC740 \\uACF5\\uC2DD \\uACF5\\uACE0 \\uC804\\uAE4C\\uC9C0 \\uBCC0\\uACBD\\uB420 \\uC218 \\uC788\\uC2B5\\uB2C8\\uB2E4."'
@@ -195,6 +276,9 @@ def main() -> None:
     args = parser.parse_args()
     content, url, captured_at = source_bytes(args.fixture)
     snapshot = snapshot_from_xml(content, url, captured_at)
+    snapshot["announcementSourceUrl"] = ANNOUNCEMENTS_API
+    snapshot["announcementCapturedAt"] = captured_at if not args.fixture else None
+    snapshot["announcedRows"] = fetch_announced_rows() if not args.fixture else []
     html = build_html(snapshot)
     OUTPUT.write_text(html, encoding="utf-8")
     print(json.dumps({"output": str(OUTPUT), "source": url, "capturedAt": captured_at,
