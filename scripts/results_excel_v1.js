@@ -2,7 +2,15 @@
   "use strict";
 
   const encoder = new TextEncoder();
-  const icon = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false"><path fill="#217346" d="M4 2h11l5 5v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z"/><path fill="#e8f5ed" d="M14 2v6h6z"/><path fill="#fff" d="m6 10 2.1 3.4L6 17h2l1.2-2.2 1.2 2.2h2l-2.1-3.6L12.4 10h-2l-1.2 2.1L8 10z"/></svg>';
+  function icon() {
+    return Vue.h("svg", { viewBox: "0 0 32 32", width: 23, height: 23, "aria-hidden": "true", focusable: "false" }, [
+      Vue.h("rect", { x: 11, y: 3, width: 18, height: 26, rx: 2, fill: "#21a366" }),
+      Vue.h("path", { d: "M20 3h7a2 2 0 0 1 2 2v22a2 2 0 0 1-2 2h-7z", fill: "#107c41" }),
+      Vue.h("path", { d: "M20 10h9M20 16h9M20 22h9M24.5 3v26", stroke: "#d8f3e3", "stroke-width": 1, opacity: 0.7 }),
+      Vue.h("rect", { x: 2, y: 7, width: 17, height: 18, rx: 1, fill: "#185c37" }),
+      Vue.h("path", { d: "M5.2 10h3.1l2.2 4 2.2-4h3.1L12 16l3.8 6h-3.1l-2.2-4-2.2 4H5.2L9 16z", fill: "#fff" }),
+    ]);
+  }
 
   function xml(value) {
     return String(value ?? "")

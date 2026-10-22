@@ -8,9 +8,18 @@ const context = {
   window: {},
   document: { readyState: "loading", addEventListener() {} },
   TextEncoder,
+  Vue: { h: (tag, attrs, children) => ({ tag, attrs, children }) },
 };
 vm.runInNewContext(source, context);
 const { workbook, tableRows } = context.window.__UST_RESULTS_EXCEL_V1__;
+
+test("Excel button icon is a rendered SVG with a white X and spreadsheet grid", () => {
+  const image = context.window.__UST_RESULTS_EXCEL_V1__.icon();
+  assert.equal(image.tag, "svg");
+  assert.equal(image.attrs.viewBox, "0 0 32 32");
+  assert.ok(image.children.some((part) => part.tag === "path" && part.attrs.fill === "#fff"));
+  assert.ok(image.children.some((part) => part.tag === "path" && part.attrs.stroke === "#d8f3e3"));
+});
 
 function storedFiles(archive) {
   const bytes = Buffer.from(archive);

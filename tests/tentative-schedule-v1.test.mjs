@@ -152,6 +152,8 @@ test("v5 script, labels, and offline schedule path are connected", () => {
   assert.ok(html.indexOf('<script id="ust-results-excel-v1">') < html.indexOf('<script id="ust-vue-dashboard-runtime">'));
   assert.match(html, /className:"date-range-form"[^\n]*?children:\[e\("button",\{type:"button",className:"results-export"/);
   assert.match(html, /onClick:\(\)=>window\.__UST_RESULTS_EXCEL_V1__\.download\(\)/);
+  assert.match(html, /children:window\.__UST_RESULTS_EXCEL_V1__\.icon\(\)/);
+  assert.doesNotMatch(html, /dangerouslySetInnerHTML/);
   assert.doesNotMatch(html, /"\\uC790\\uB8CC \\uAE30\\uC900 \\uC2DC\\uAC01 \\uC774\\uD6C4 \\uC608\\uC815"/);
 });
 

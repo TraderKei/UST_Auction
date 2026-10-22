@@ -259,7 +259,7 @@ def build_html(snapshot: dict) -> str:
                         'className:`released ${$==="results"?"is-result":C?.tentative?"is-tentative":"is-upcoming"}`,children:$==="results"?"\\uACB0\\uACFC":C?.tentative?"\\uC7A0\\uC815":"\\uC608\\uC815"')
     html = replace_once(html,
                         'className:"date-range-form",onSubmit:rt,noValidate:!0,children:[a("label"',
-                        'className:"date-range-form",onSubmit:rt,noValidate:!0,children:[e("button",{type:"button",className:"results-export","aria-label":"최근 입찰 결과 엑셀 다운로드",title:"최근 입찰 결과 엑셀 다운로드",onClick:()=>window.__UST_RESULTS_EXCEL_V1__.download(),dangerouslySetInnerHTML:{__html:window.__UST_RESULTS_EXCEL_V1__.icon}}),a("label"')
+                        'className:"date-range-form",onSubmit:rt,noValidate:!0,children:[e("button",{type:"button",className:"results-export","aria-label":"최근 입찰 결과 엑셀 다운로드",title:"최근 입찰 결과 엑셀 다운로드",onClick:()=>window.__UST_RESULTS_EXCEL_V1__.download(),children:window.__UST_RESULTS_EXCEL_V1__.icon()}),a("label"')
     html = replace_once(html,
                         ',e("span",{children:s==="snapshot"?"\\uD45C\\uBCF8 \\uAE30\\uC900 \\uC608\\uC815 \\xB7 \\uCD5C\\uC2E0 \\uC77C\\uC815 \\uBBF8\\uD655\\uC778":"\\uC790\\uB8CC \\uAE30\\uC900 \\uC2DC\\uAC01 \\uC774\\uD6C4 \\uC608\\uC815"})',
                         '')
