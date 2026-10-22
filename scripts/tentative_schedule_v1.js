@@ -18,9 +18,14 @@
     return { BILL: "Bill", NOTE: "Note", BOND: "Bond" }[type] || type;
   };
   const identity = (date, type, term) => `${date}|${type}|${termKey(term)}`;
-  const officialIdentity = (row) => identity(
-    row.auction_date, securityType(row), row.original_security_term || row.security_term,
-  );
+  const officialIdentity = (row) => {
+    const type = securityType(row);
+    // Reopened bills can have a different original term (for example, 4-Week vs 17-Week).
+    const term = type === "Bill"
+      ? row.security_term || row.original_security_term
+      : row.original_security_term || row.security_term;
+    return identity(row.auction_date, type, term);
+  };
 
   window.__UST_TENTATIVE_INFO__ = snapshot && {
     sourceUrl: snapshot.sourceUrl,

@@ -97,12 +97,16 @@ def build_html(snapshot: dict) -> str:
                  f'<script id="ust-tentative-merger-v1">{merger}</script>\n'
                  '<style id="ust-v5-tentative-styles">\n'
                  '.tentative-badge{display:inline-block;margin-left:5px;padding:1px 4px;border:1px solid #ac84c8;border-radius:3px;color:#e5c6ff;font-size:9px;white-space:nowrap}\n'
-                 '.auction-calendar-event.is-tentative{border-color:#ad83c8;background:#3b2b4d;color:#f0dfff}\n'
-                 '.auction-calendar-legend i.tentative{background:#76529b}\n'
+                 '.auction-month-calendar{--ust-tentative-color:#76529b}\n'
+                 ':root .auction-month-calendar .auction-calendar-event.is-tentative{border-color:#ad83c8;background:var(--ust-tentative-color);color:#fff}\n'
+                 '.auction-calendar-legend i.tentative{background:var(--ust-tentative-color)}\n'
                  '.auction-calendar-source{font-size:9px;line-height:1.5;color:var(--muted)}\n'
                  '.auction-calendar-source a{color:#a8cfff;text-decoration:underline}\n'
                  '</style>\n')
     html = replace_once(html, '<script id="standalone-live-data-script">', insertion + '<script id="standalone-live-data-script">')
+
+    html = replace_once(html, 'term: row.original_security_term || row.security_term || "",',
+                        'term: type === "Bill" ? row.security_term || row.original_security_term || "" : row.original_security_term || row.security_term || "",')
 
     official = '''const upcoming = normalized
       .filter((row) => row.auctionDate >= todayText && row.auctionDate <= upcomingTo && row.bidToCover === null)

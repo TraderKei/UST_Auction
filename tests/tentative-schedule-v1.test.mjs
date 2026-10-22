@@ -77,6 +77,27 @@ test("official announcement or result replaces the matching tentative event", ()
   assert.ok(!afterResult.some((row) => row.auctionDate === "2026-10-26" && row.type === "Note" && row.term === "2-Year"));
 });
 
+test("reopened bills match by auction term, not their different original term", async () => {
+  const { __UST_MERGE_TENTATIVE__: merge } = merger();
+  const official = ["4-Week", "8-Week"].map((term) => ({
+    auction_date: "2026-10-29", security_type: "Bill", security_term: term,
+    original_security_term: "17-Week", cusip: term, bid_to_cover_ratio: null,
+  }));
+  const announced = official.map((row) => ({
+    auctionDate: row.auction_date, type: "Bill", term: row.security_term, cusip: row.cusip,
+  }));
+  const merged = merge(official, announced, "2026-10-22", "2027-01-20");
+  assert.equal(merged.filter((row) => row.auctionDate === "2026-10-29" && row.type === "Bill").length, 2);
+  assert.ok(merged.filter((row) => row.auctionDate === "2026-10-29" && row.type === "Bill").every((row) => !row.tentative));
+
+  const rendered = await runLoader(async () => ({ ok: true, json: async () => ({
+    data: [{ ...official[0], bid_to_cover_ratio: "2.83" }],
+    meta: { "total-pages": 1, "total-count": 1 },
+  }) }));
+  assert.equal(rendered.results[0].term, "4-Week");
+  assert.ok(!rendered.upcoming.some((row) => row.auctionDate === "2026-10-29" && row.term === "4-Week"));
+});
+
 test("only future tentative rows within 90 days appear, including bills", () => {
   const { __UST_MERGE_TENTATIVE__: merge } = merger();
   const rows = merge([], [], "2026-10-22", "2027-01-20");
@@ -120,4 +141,12 @@ test("v5 script, labels, and offline schedule path are connected", () => {
   assert.match(html, /const tentativeCount = datedEvents\.filter/);
   assert.match(html, /className:"tentative-badge"/);
   assert.match(html, /excludeBills: false/);
+});
+
+test("tentative calendar events use the same color as the legend in every theme", () => {
+  const css = html.match(/<style id="ust-v5-tentative-styles">([\s\S]*?)<\/style>/)?.[1];
+  assert.ok(css);
+  assert.match(css, /\.auction-month-calendar\{--ust-tentative-color:#76529b\}/);
+  assert.match(css, /:root \.auction-month-calendar \.auction-calendar-event\.is-tentative\{[^}]*background:var\(--ust-tentative-color\)/);
+  assert.match(css, /\.auction-calendar-legend i\.tentative\{background:var\(--ust-tentative-color\)\}/);
 });

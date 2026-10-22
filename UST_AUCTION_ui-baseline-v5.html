@@ -64,9 +64,14 @@
     return { BILL: "Bill", NOTE: "Note", BOND: "Bond" }[type] || type;
   };
   const identity = (date, type, term) => `${date}|${type}|${termKey(term)}`;
-  const officialIdentity = (row) => identity(
-    row.auction_date, securityType(row), row.original_security_term || row.security_term,
-  );
+  const officialIdentity = (row) => {
+    const type = securityType(row);
+    // Reopened bills can have a different original term (for example, 4-Week vs 17-Week).
+    const term = type === "Bill"
+      ? row.security_term || row.original_security_term
+      : row.original_security_term || row.security_term;
+    return identity(row.auction_date, type, term);
+  };
 
   window.__UST_TENTATIVE_INFO__ = snapshot && {
     sourceUrl: snapshot.sourceUrl,
@@ -108,8 +113,9 @@
 </script>
 <style id="ust-v5-tentative-styles">
 .tentative-badge{display:inline-block;margin-left:5px;padding:1px 4px;border:1px solid #ac84c8;border-radius:3px;color:#e5c6ff;font-size:9px;white-space:nowrap}
-.auction-calendar-event.is-tentative{border-color:#ad83c8;background:#3b2b4d;color:#f0dfff}
-.auction-calendar-legend i.tentative{background:#76529b}
+.auction-month-calendar{--ust-tentative-color:#76529b}
+:root .auction-month-calendar .auction-calendar-event.is-tentative{border-color:#ad83c8;background:var(--ust-tentative-color);color:#fff}
+.auction-calendar-legend i.tentative{background:var(--ust-tentative-color)}
 .auction-calendar-source{font-size:9px;line-height:1.5;color:var(--muted)}
 .auction-calendar-source a{color:#a8cfff;text-decoration:underline}
 </style>
@@ -225,7 +231,7 @@
       issueDate: row.issue_date || "",
       maturityDate: row.maturity_date || "",
       type,
-      term: row.original_security_term || row.security_term || "",
+      term: type === "Bill" ? row.security_term || row.original_security_term || "" : row.original_security_term || row.security_term || "",
       securityTerm: row.security_term || "",
       offeringAmount: number(row.offering_amt),
       closingTimeCompetitive: row.closing_time_comp || "",
