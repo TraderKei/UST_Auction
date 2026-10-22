@@ -134,17 +134,17 @@ def build_html(snapshot: dict) -> str:
     insertion = (f'<script type="application/json" id="ust-tentative-schedule-v1">{data}</script>\n'
                  f'<script id="ust-tentative-merger-v1">{merger}</script>\n'
                  '<style id="ust-v5-tentative-styles">\n'
-                 ':root{--ust-tentative-color:#3b4650;--ust-tentative-text:#e9eef2;--ust-tentative-border:#788895;--ust-upcoming-swatch:#ff8e0a}\n'
-                 'html[data-ust-theme="light"]{--ust-tentative-color:#e3e8ed;--ust-tentative-text:#35424e;--ust-tentative-border:#8b98a4;--ust-upcoming-swatch:#ed6d1e}\n'
+                 ':root{--ust-tentative-color:#3b4650;--ust-tentative-text:#e9eef2;--ust-tentative-border:#788895;--ust-upcoming-swatch:#755b42}\n'
+                 'html[data-ust-theme="light"]{--ust-tentative-color:#e3e8ed;--ust-tentative-text:#35424e;--ust-tentative-border:#8b98a4;--ust-upcoming-swatch:#8a6b4a}\n'
                  '.tentative-badge{display:inline-block;margin-left:5px;padding:1px 4px;border:1px solid var(--ust-tentative-border);border-radius:3px;color:var(--ust-tentative-text);font-size:9px;white-space:nowrap}\n'
                  ':root .auction-month-calendar .auction-calendar-event.is-tentative{border-color:var(--ust-tentative-border);background:var(--ust-tentative-color);color:var(--ust-tentative-text)}\n'
                  '.auction-calendar-legend i.tentative{background:var(--ust-tentative-color)}\n'
                  'html[data-ust-theme="light"] .auction-calendar-legend i.tentative{border:1px solid var(--ust-tentative-border)}\n'
                  ':root .latest-panel .released.is-result{background:#245c91;color:#fff;border:1px solid #245c91}\n'
-                 ':root .latest-panel .released.is-upcoming{background:var(--ust-upcoming-swatch);color:#242424;border:1px solid var(--ust-upcoming-swatch)}\n'
+                 ':root .auction-month-calendar .auction-calendar-legend i.upcoming{background:var(--ust-upcoming-swatch)}\n'
+                 ':root .latest-panel .released.is-upcoming{background:var(--ust-upcoming-swatch);color:#fff;border:1px solid var(--ust-upcoming-swatch)}\n'
                  ':root .latest-panel .released.is-tentative{background:var(--ust-tentative-color);color:var(--ust-tentative-text);border:1px solid var(--ust-tentative-border)}\n'
                  '.auction-calendar-source{font-size:9px;line-height:1.5;color:var(--muted)}\n'
-                 '.auction-calendar-source a{color:#a8cfff;text-decoration:underline}\n'
                  '</style>\n')
     html = replace_once(html, '<script id="standalone-live-data-script">', insertion + '<script id="standalone-live-data-script">')
 
@@ -233,20 +233,7 @@ def build_html(snapshot: dict) -> str:
       provenance.className = "auction-calendar-source";
       const info = window.__UST_TENTATIVE_INFO__;
       if (info) {
-        const link = document.createElement("a");
-        link.href = info.sourceUrl;
-        link.target = "_blank";
-        link.rel = "noreferrer";
-        link.textContent = "재무부 잠정 일정 원문";
-        provenance.append(link, document.createTextNode(` · 수집 ${info.capturedAt} UTC · 잠정 일정은 공고 전 변경될 수 있습니다.`));
-        if (info.announcementSourceUrl) {
-          const announcedLink = document.createElement("a");
-          announcedLink.href = info.announcementSourceUrl;
-          announcedLink.target = "_blank";
-          announcedLink.rel = "noreferrer";
-          announcedLink.textContent = "TreasuryDirect 공식 공고";
-          provenance.append(document.createTextNode(" · "), announcedLink);
-        }
+        provenance.textContent = `재무부 잠정 일정 · 수집 ${info.capturedAt} UTC · 공고 전 변경될 수 있습니다.`;
       }
       calendar.append(head, meta, weekdayRow, grid, legend, provenance, message);''')
 
@@ -267,6 +254,50 @@ def build_html(snapshot: dict) -> str:
     html = html[:note_start] + note + html[note_end:]
     html = replace_once(html, "fonts, including any derivative works, can be bundled, embedded, \n",
                         "fonts, including any derivative works, can be bundled, embedded,\n")
+    translations = {
+        "미국 재무부 Fiscal Data 및 TreasuryDirect 공식 API 자료입니다.": "Data from the U.S. Treasury Fiscal Data and TreasuryDirect official APIs.",
+        "조회 범위": "Query range",
+        "응찰률": "Bid-to-cover",
+        "공식 Fiscal Data API 수신에 실패했습니다.": "Could not fetch the official Fiscal Data API.",
+        "공식 API 재조회 실패": "Official API refresh failed",
+        "API 재조회 실패": "API refresh failed",
+        "수신본을 표시합니다.": "Displaying the saved copy.",
+        "공식 발표문으로 검증한": "verified against the official announcement",
+        "10년물": "10-year Treasury",
+        "건만 표시합니다.": " auction(s) are shown.",
+        "다른 입찰의 최신 상태는 확인할 수 없습니다.": "The latest status of other auctions is unavailable.",
+        "기준 화면의 데이터 연결 지점을 찾지 못했습니다.": "Could not find the baseline data connection.",
+        "실데이터 연결 초기화에 실패했습니다.": "Could not initialize the live data connection.",
+        "미국 재무부 · 2026-10-07 입찰 결과": "U.S. Treasury · 2026-10-07 auction result",
+        "공고된 예정 입찰": "Announced upcoming auction",
+        "공고된 예정": "Announced upcoming",
+        "공고 일정과 재무부 잠정 일정을 함께 표시합니다. 잠정 일정은 공식 공고 전까지 변경될 수 있습니다.": "Announced and Treasury tentative schedules are shown together. Tentative dates may change before an official announcement.",
+        "잠정 일정 · 공식 공고 전": "Tentative schedule · before official announcement",
+        "잠정 · 공고 확인 필요": "Tentative · check announcement",
+        "재무부 잠정 일정": "Treasury tentative schedule",
+        "공고 전 변경될 수 있습니다.": "Subject to change before announcement.",
+        "잠정 일정": "Tentative schedule",
+        "공고 확인 필요": "Check announcement",
+        "공고": "Announced",
+        "잠정": "Tentative",
+        "수집": "Collected",
+        "입찰": "Auction",
+        "을 선택했습니다.": " selected.",
+        " 기준 미국 국채 입찰 일정": " U.S. Treasury auction schedule",
+        " 기준 ·": " zone ·",
+    }
+    table_match = re.search(r'(<script type="application/json" id="ust-translation-table">)(.*?)(</script>)', html, re.DOTALL)
+    if not table_match:
+        raise ValueError("Missing v4 translation table")
+    table = json.loads(table_match.group(2))
+    table = [entry for entry in table if entry["ko"] not in translations]
+    table.extend({"ko": ko, "en": en} for ko, en in translations.items())
+    html = html[:table_match.start(2)] + json.dumps(table, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c") + html[table_match.end(2):]
+    html = replace_once(html, "document.title = state.language === \"en\" ? \"UST AUCTION · UI Baseline v4\" : \"UST AUCTION · UI 기준 v4\";",
+                        "document.title = state.language === \"en\" ? \"UST AUCTION · UI Baseline v5\" : \"UST AUCTION · UI 기준 v5\";")
+    html = replace_once(html, ">한국어</button>", ">{{state.language === 'ko' ? '한국어' : 'Korean'}}</button>")
+    html = replace_once(html, "result = result.replace(/(\\d+)년/g, '$1Y').replace(/(\\d+)주/g, '$1W').replace(/(\\d+)건/g, '$1 items');",
+                        "result = result.replace(/(\\d+)년/g, '$1Y').replace(/(\\d+)주/g, '$1W').replace(/(\\d+)일/g, '$1D').replace(/(\\d+)건/g, '$1 items');")
     return html
 
 
