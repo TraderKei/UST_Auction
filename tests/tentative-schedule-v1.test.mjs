@@ -191,6 +191,17 @@ test("market rates show four decimals and the header omits data as-of text", () 
   assert.doesNotMatch(preferences, /sourceTime|\.ust-asof/);
 });
 
+test("tentative badge matches reopening badge size and all chart axes keep dates only", () => {
+  const css = html.match(/<style id="ust-v5-tentative-styles">([\s\S]*?)<\/style>/)?.[1];
+  const dashboard = html.match(/<script id="ust-vue-dashboard-runtime">([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(css && dashboard);
+  assert.match(css, /\.tentative-badge\{[^}]*margin-left:4px;padding:1px 5px;[^}]*font-size:11px/);
+  assert.match(html, /\.reopen-badge\{[^}]*margin-left:4px;padding:1px 5px;font-size:11px/);
+  assert.match(dashboard, /function be\(\{row:t,zone:n,x:s\}\)[\s\S]*?className:"axis-date"/);
+  assert.doesNotMatch(dashboard, /className:"axis-term"/);
+  assert.match(dashboard, /e\(be,\{row:l,zone:s,x:/);
+});
+
 test("English mode translates new calendar and acquisition messages", () => {
   const table = JSON.parse(html.match(/<script type="application\/json" id="ust-translation-table">(.*?)<\/script>/s)?.[1]);
   const entries = table.slice().sort((a, b) => b.ko.length - a.ko.length);

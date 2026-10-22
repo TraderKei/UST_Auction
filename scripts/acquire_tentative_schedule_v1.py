@@ -136,7 +136,7 @@ def build_html(snapshot: dict) -> str:
                  '<style id="ust-v5-tentative-styles">\n'
                  ':root{--ust-tentative-color:#3b4650;--ust-tentative-text:#e9eef2;--ust-tentative-border:#788895;--ust-upcoming-swatch:#755b42}\n'
                  'html[data-ust-theme="light"]{--ust-tentative-color:#e3e8ed;--ust-tentative-text:#35424e;--ust-tentative-border:#8b98a4;--ust-upcoming-swatch:#8a6b4a}\n'
-                 '.tentative-badge{display:inline-block;margin-left:5px;padding:1px 4px;border:1px solid var(--ust-tentative-border);border-radius:3px;color:var(--ust-tentative-text);font-size:9px;white-space:nowrap}\n'
+                 '.tentative-badge{display:inline-block;margin-left:4px;padding:1px 5px;border:1px solid var(--ust-tentative-border);border-radius:3px;color:var(--ust-tentative-text);font-size:11px;white-space:nowrap}\n'
                  ':root .auction-month-calendar .auction-calendar-event.is-tentative{border-color:var(--ust-tentative-border);background:var(--ust-tentative-color);color:var(--ust-tentative-text)}\n'
                  '.auction-calendar-legend i.tentative{background:var(--ust-tentative-color)}\n'
                  'html[data-ust-theme="light"] .auction-calendar-legend i.tentative{border:1px solid var(--ust-tentative-border)}\n'
@@ -201,6 +201,9 @@ def build_html(snapshot: dict) -> str:
                         'if (auction.type === "Bill") return `${amount}${String(auction.term || auction.securityTerm).includes("Day") ? "D" : "W"}`;')
     html = replace_once(html, 'pe=t=>t.replace(/-Year(s)?/gi,"\\uB144").replace(/-Week(s)?/gi,"\\uC8FC").replace(/-Month(s)?/gi,"\\uAC1C\\uC6D4")',
                         'pe=t=>t.replace(/-Year(s)?/gi,"\\uB144").replace(/-Week(s)?/gi,"\\uC8FC").replace(/-Month(s)?/gi,"\\uAC1C\\uC6D4").replace(/-Day(s)?/gi,"\\uC77C")')
+    html = replace_once(html,
+                        ',a("text",{className:"axis-term",x:s,y:"210",textAnchor:"middle",children:[pe(t.term)," \\xB7 ",r.converted?n:"\\uC6D0\\uBB38 ET"]})',
+                        '')
     html = replace_once(html, '.map((auction) => ({ auction, status: "upcoming" }));',
                         '.map((auction) => ({ auction, status: auction.tentative ? "tentative" : "upcoming" }));')
     html = replace_once(html, '''const latest = events.at(-1)?.display.date.slice(0, 7);
