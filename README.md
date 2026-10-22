@@ -1,5 +1,9 @@
 # UST Auction — 다크 대시보드
 
+## 잠정 입찰 일정 v5
+
+[UST_AUCTION_ui-baseline-v5.html](UST_AUCTION_ui-baseline-v5.html)은 공식 입찰 공고와 재무부 잠정 일정을 구분해 함께 표시하는 독립 실행 HTML입니다. 원본 v4는 보존했습니다. 잠정 XML 재수집·HTML 재생성 절차와 출처·병합 규칙은 [일정 v5 문서](docs/SCHEDULE_v5.md)에 있습니다. 입수기는 [acquire_tentative_schedule_v1.py](scripts/acquire_tentative_schedule_v1.py)입니다.
+
 ## 입찰 데이터 수신 프로그램 (PostgreSQL)
 
 Python 3.12+ / PostgreSQL 16 수집기와 DB는 공식 Fiscal Data 입찰 원천을 적재합니다. 최종 v3 화면도 Fiscal Data Auctions API의 실제 데이터를 직접 읽으며, API 실패 시 하드코딩 표본으로 대체하지 않습니다. PostgreSQL은 전체 lineage·revision의 영속 저장과 검증에 사용합니다. 기존 QRA 수집·스키마는 향후 제공을 위한 보류 범위이며 v3 배포의 선행조건이 아닙니다.
