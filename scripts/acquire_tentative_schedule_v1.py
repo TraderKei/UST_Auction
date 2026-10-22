@@ -145,6 +145,8 @@ def build_html(snapshot: dict) -> str:
                  ':root .latest-panel .released.is-upcoming{background:var(--ust-upcoming-swatch);color:#fff;border:1px solid var(--ust-upcoming-swatch)}\n'
                  ':root .latest-panel .released.is-tentative{background:var(--ust-tentative-color);color:var(--ust-tentative-text);border:1px solid var(--ust-tentative-border)}\n'
                  '.auction-calendar-source{font-size:9px;line-height:1.5;color:var(--muted)}\n'
+                 ':root .auction-month-calendar .auction-calendar-source,:root .auction-month-calendar .auction-calendar-message{margin:0}\n'
+                 ':root .auction-month-calendar .auction-calendar-message{margin-top:-6px}\n'
                  '</style>\n')
     html = replace_once(html, '<script id="standalone-live-data-script">', insertion + '<script id="standalone-live-data-script">')
 
@@ -247,8 +249,20 @@ def build_html(snapshot: dict) -> str:
                         'className:`released ${$==="results"?"is-result":C?.tentative?"is-tentative":"is-upcoming"}`,children:$==="results"?"\\uACB0\\uACFC":C?.tentative?"\\uC7A0\\uC815":"\\uC608\\uC815"')
     note_start = html.index('a("p",{className:"schedule-note",children:[', html.index('function ve({upcoming:'))
     note_end = html.index(']}),e("div",{className:"table-wrap"', note_start)
-    note = 'a("p",{className:"schedule-note",children:["\\uAE30\\uC900 \\uC2DC\\uAC01: ",Ee.full," \\xB7 ","\\uC7A0\\uC815 \\uC77C\\uC815\\uC740 \\uACF5\\uC2DD \\uACF5\\uACE0 \\uC804\\uAE4C\\uC9C0 \\uBCC0\\uACBD\\uB420 \\uC218 \\uC788\\uC2B5\\uB2C8\\uB2E4."'
+    note = 'a("p",{className:"schedule-note",children:["\\uC7A0\\uC815 \\uC77C\\uC815\\uC740 \\uACF5\\uC2DD \\uACF5\\uACE0 \\uC804\\uAE4C\\uC9C0 \\uBCC0\\uACBD\\uB420 \\uC218 \\uC788\\uC2B5\\uB2C8\\uB2E4."'
     html = html[:note_start] + note + html[note_end:]
+    html = replace_once(html, 'i.rate.toFixed(2)', 'i.rate.toFixed(4)')
+    html = replace_once(html, '''    const sourceTime = root.querySelector(".time-strip > span:last-child");
+    if (!sourceTime) return;
+    let asOf = topRight.querySelector(".ust-asof");
+    if (!asOf) {
+      asOf = document.createElement("span");
+      asOf.className = "ust-asof";
+      zoneSwitch.before(asOf);
+    }
+    const value = sourceTime.textContent.trim();
+    if (asOf.textContent !== value) asOf.textContent = value;
+''', '')
     html = replace_once(html, "fonts, including any derivative works, can be bundled, embedded, \n",
                         "fonts, including any derivative works, can be bundled, embedded,\n")
     translations = {

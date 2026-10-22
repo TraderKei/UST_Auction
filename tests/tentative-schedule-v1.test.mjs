@@ -173,10 +173,22 @@ test("calendar footer has no links and the upcoming badge uses a muted color wit
   assert.ok(scheduleNote);
   const noteStrings = [...scheduleNote.matchAll(/"(?:\\.|[^"\\])*"/g)].map(([literal]) => literal);
   assert.equal(JSON.parse(noteStrings.at(-1)), "잠정 일정은 공식 공고 전까지 변경될 수 있습니다.");
+  assert.deepEqual(noteStrings.map((literal) => JSON.parse(literal)), ["잠정 일정은 공식 공고 전까지 변경될 수 있습니다."]);
+  assert.match(css, /\.auction-calendar-source,:root \.auction-month-calendar \.auction-calendar-message\{margin:0\}/);
+  assert.match(css, /\.auction-calendar-message\{margin-top:-6px\}/);
   assert.match(css, /--ust-upcoming-swatch:#755b42/);
   assert.match(css, /--ust-upcoming-swatch:#8a6b4a/);
   assert.match(css, /\.auction-calendar-legend i\.upcoming\{background:var\(--ust-upcoming-swatch\)\}/);
   assert.match(css, /\.released\.is-upcoming\{background:var\(--ust-upcoming-swatch\);color:#fff/);
+});
+
+test("market rates show four decimals and the header omits data as-of text", () => {
+  const dashboard = html.match(/<script id="ust-vue-dashboard-runtime">([\s\S]*?)<\/script>/)?.[1];
+  const preferences = html.match(/<script id="ust-v4-preferences">([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(dashboard && preferences);
+  assert.match(dashboard, /i\.rate\.toFixed\(4\)/);
+  assert.doesNotMatch(dashboard, /i\.rate\.toFixed\(2\)/);
+  assert.doesNotMatch(preferences, /sourceTime|\.ust-asof/);
 });
 
 test("English mode translates new calendar and acquisition messages", () => {
