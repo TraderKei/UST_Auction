@@ -17,9 +17,10 @@ function merger(documentOverride) {
   return window;
 }
 
-async function runLoader(fetch) {
+async function runLoader(fetch, officialResults = []) {
   const loader = html.match(/<script id="standalone-live-data-script">([\s\S]*?)<\/script>/)?.[1];
   const window = merger();
+  window.__UST_LOAD_OFFICIAL_RESULTS__ = async () => officialResults;
   let start;
   let resolveRender;
   const finished = new Promise((resolve) => { resolveRender = resolve; });
@@ -52,6 +53,57 @@ test("v5 embeds a sourced Treasury XML snapshot and preserves v4 as a separate v
   assert.ok(!v4.includes('id="ust-tentative-schedule-v1"'));
   assert.ok(html.includes('id="ust-tentative-schedule-v1"'));
   assert.match(html, /<title>UST AUCTION · UI Baseline v5<\/title>/);
+});
+
+test("TreasuryDirect auctioned results map renamed fields and replace incomplete Fiscal rows", async () => {
+  const window = {};
+  const document = {
+    getElementById: () => ({ textContent: snapshotText }),
+    createElement: () => ({ remove() {} }),
+    head: { appendChild: (script) => {
+      assert.match(script.src, /securities\/auctioned\?format=jsonp&day=45/);
+      window.__UST_TD_RESULTS_V1__([{
+        cusip: "RECENT", competitiveAuctionCloseDate: "2026-10-21T00:00:00",
+        securityType: "Bond", type: "Bond", securityTerm: "19-Year 10-Month",
+        originalSecurityTerm: "20-Year", issueDate: "2026-10-31T00:00:00",
+        bidToCoverRatio: "2.73", grandTotalParAwarded: "13000000000",
+        grandTotalParRecognized: "35490000000", highYield: "5.469",
+        primaryDealersCompetitiveParAwarded: "1326000000",
+        directBiddersCompetitiveParAwarded: "4069000000",
+        indirectBiddersCompetitiveParAwarded: "7505000000",
+        allottedAtHighYieldPercentage: "63.11",
+      }]);
+    } },
+  };
+  vm.runInNewContext(source, { document, window, Date, setTimeout, clearTimeout });
+  const results = await window.__UST_LOAD_OFFICIAL_RESULTS__();
+  assert.equal(results.length, 1);
+  assert.equal(results[0].auction_date, "2026-10-21");
+  assert.equal(results[0].bid_to_cover_ratio, "2.73");
+  assert.equal(results[0].total_accepted, "13000000000");
+  assert.equal(results[0].high_yield, "5.469");
+  assert.equal(results[0].primary_dealer_accepted, "1326000000");
+
+  const fiscalRows = [
+    { cusip: "RECENT", auction_date: "2026-10-21", issue_date: "2026-10-31", bid_to_cover_ratio: null },
+    { cusip: "OLDER", auction_date: "2026-10-08", issue_date: "2026-10-15", bid_to_cover_ratio: "2.5" },
+  ];
+  const merged = window.__UST_MERGE_RESULTS__(fiscalRows, results);
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].bid_to_cover_ratio, "2.73");
+  assert.equal(merged[1].bid_to_cover_ratio, "2.5");
+  const treasuryOnly = window.__UST_MERGE_RESULTS__([fiscalRows[1]], results);
+  assert.equal(treasuryOnly.length, 2);
+  assert.equal(treasuryOnly[1].cusip, "RECENT");
+  const completeFiscal = window.__UST_MERGE_RESULTS__([{ ...fiscalRows[0], bid_to_cover_ratio: "2.91" }], results);
+  assert.equal(completeFiscal.length, 1);
+  assert.equal(completeFiscal[0].bid_to_cover_ratio, "2.91");
+
+  const rendered = await runLoader(async () => ({ ok: true, json: async () => ({
+    data: fiscalRows, meta: { "total-pages": 1, "total-count": fiscalRows.length },
+  }) }), results);
+  assert.ok(rendered.results.some((row) => row.cusip === "RECENT" && row.bidToCover === 2.73));
+  assert.equal(rendered.results.filter((row) => row.cusip === "RECENT").length, 1);
 });
 
 test("official announcement or result replaces the matching tentative event", () => {
@@ -143,7 +195,8 @@ test("v5 script, labels, and offline schedule path are connected", () => {
   }
   assert.match(html, /window\.__UST_MERGE_TENTATIVE__\(rows, officialUpcoming, todayText, upcomingTo\)/);
   assert.match(html, /upcoming: window\.__UST_MERGE_TENTATIVE__\(announced, announced\.map\(normalize\), todayText, upcomingTo\)/);
-  assert.match(html, /window\.__UST_AUGMENT_OFFICIAL__\(fiscalRows, treasuryDirectRows, todayText, upcomingTo\)/);
+  assert.match(html, /window\.__UST_MERGE_RESULTS__\(fiscalRows, treasuryDirectResults\)/);
+  assert.match(html, /const treasuryDirectResultsPromise = window\.__UST_LOAD_OFFICIAL_RESULTS__\(\)/);
   assert.match(html, /status: auction\.tentative \? "tentative" : "upcoming"/);
   assert.match(html, /const tentativeCount = datedEvents\.filter/);
   assert.match(html, /className:"tentative-badge"/);

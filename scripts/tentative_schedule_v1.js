@@ -54,6 +54,80 @@
   };
   const embeddedAnnouncements = Array.isArray(snapshot?.announcedRows) ? snapshot.announcedRows : [];
 
+  const treasuryDirectResult = (row) => {
+    const auctionDate = String(row.competitiveAuctionCloseDate || row.auctionDate || "").slice(0, 10);
+    const issueDate = String(row.issueDate || "").slice(0, 10);
+    const bidToCover = Number(row.bidToCoverRatio);
+    const accepted = Number(row.grandTotalParAwarded ?? row.totalAccepted);
+    if (!datePattern.test(auctionDate) || !datePattern.test(issueDate) || !row.cusip
+      || !row.securityTerm || !Number.isFinite(bidToCover)
+      || bidToCover <= 0 || !Number.isFinite(accepted) || accepted <= 0) return null;
+    return {
+      cusip: row.cusip,
+      auction_date: auctionDate,
+      announcemt_date: String(row.announcementDate || "").slice(0, 10),
+      security_type: row.securityType || "Bill",
+      security_term: row.securityTerm || "",
+      original_security_term: row.originalSecurityTerm || row.securityTerm || "",
+      inflation_index_security: row.type === "TIPS" || row.inflationProtected === "Yes" ? "Yes" : "No",
+      floating_rate: row.type === "FRN" || row.floatingRate === "Yes" ? "Yes" : "No",
+      cash_management_bill_cmb: row.type === "CMB" || row.cashManagementBill === "Yes" ? "Yes" : "No",
+      offering_amt: row.offeringAmount,
+      closing_time_comp: row.competitiveAuctionCloseTime || row.closingTimeCompetitive || "",
+      issue_date: issueDate,
+      maturity_date: String(row.maturityDate || "").slice(0, 10),
+      reopening: row.reopening || "No",
+      bid_to_cover_ratio: row.bidToCoverRatio,
+      high_discnt_rate: row.highRate ?? row.highDiscountRate,
+      high_investment_rate: row.investmentRate ?? row.highInvestmentRate,
+      high_discnt_margin: row.highDiscountMargin,
+      high_yield: row.highYield,
+      int_rate: row.interestRate,
+      price_per100: row.pricePer100,
+      allocation_pctage: row.allottedAtHighYieldPercentage || row.allottedAtHighRatePercentage
+        || row.allottedAtHighDiscountMarginPercentage || row.allocationPercentage,
+      total_tendered: row.grandTotalParRecognized ?? row.totalTendered,
+      total_accepted: row.grandTotalParAwarded ?? row.totalAccepted,
+      primary_dealer_accepted: row.primaryDealersCompetitiveParAwarded ?? row.primaryDealerAccepted,
+      direct_bidder_accepted: row.directBiddersCompetitiveParAwarded ?? row.directBidderAccepted,
+      indirect_bidder_accepted: row.indirectBiddersCompetitiveParAwarded ?? row.indirectBidderAccepted,
+    };
+  };
+
+  window.__UST_LOAD_OFFICIAL_RESULTS__ = async () => {
+    if (!document.createElement || !document.head?.appendChild) return [];
+    return new Promise((resolve) => {
+      const callback = "__UST_TD_RESULTS_V1__";
+      const script = document.createElement("script");
+      let settled = false;
+      const finish = (rows) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        script.remove();
+        window[callback] = () => {};
+        resolve(Array.isArray(rows) ? rows.flatMap((row) => treasuryDirectResult(row) || []) : []);
+      };
+      const timeout = setTimeout(() => finish(null), 6000);
+      window[callback] = finish;
+      script.src = `https://www.treasurydirect.gov/TA_WS/securities/auctioned?format=jsonp&day=45&callback=${callback}&ts=${Date.now()}`;
+      script.onerror = () => finish(null);
+      try { document.head.appendChild(script); }
+      catch { finish(null); }
+    });
+  };
+
+  window.__UST_MERGE_RESULTS__ = (fiscalRows, treasuryDirectResults) => {
+    const results = new Map(treasuryDirectResults.map((row) => [`${row.cusip}|${row.auction_date}|${row.issue_date}`, row]));
+    const merged = fiscalRows.map((row) => {
+      const key = `${row.cusip}|${row.auction_date}|${row.issue_date || ""}`;
+      const official = results.get(key);
+      results.delete(key);
+      return official && !(Number(row.bid_to_cover_ratio) > 0) ? { ...row, ...official } : row;
+    });
+    return [...merged, ...results.values()];
+  };
+
   window.__UST_LOAD_OFFICIAL_ANNOUNCEMENTS__ = async () => {
     if (!document.createElement || !document.head?.appendChild) return embeddedAnnouncements;
     const live = await new Promise((resolve) => {
