@@ -36,7 +36,7 @@
 - 입찰 업무키는 `(cusip, auction_date, issue_date)`이며 `NULLS NOT DISTINCT`를 사용한다. 같은 typed content만 재적재하면 revision을 늘리지 않고 A→B→A는 이력으로 남긴다.
 - 문자열 `"null"`/빈 문자열/JSON null은 typed NULL, 실제 0은 0이다. 결측 사유는 `SOURCE_NULL`, `NOT_APPLICABLE`, `NOT_CONNECTED`, `UNAVAILABLE_SOURCE`, `PARSE_FAILED`, `REVIEW_REQUIRED`로 구분한다.
 - Stop은 Bill/CMB=`high_discnt_rate`, Note/Bond/TIPS=`high_yield`(TIPS real yield), FRN=`high_discnt_margin`. 응찰배수 2.48은 DB에 2.48, UI에서 248.0%다.
-- 참여자 비중은 accepted/total_accepted×100, Other는 검증 가능한 입력에서만 UI 잔여 비중이다. 직전 비교는 동일 정규화 상품/만기, 평균은 현재 제외 최대 6개 유효값과 n이다.
+- 참여자 비중은 참여자별 경쟁입찰 낙찰액/competitive_accepted×100, Other는 검증 가능한 입력에서만 UI 잔여 비중이다. 직전 비교는 동일 정규화 상품/만기, 평균은 현재 제외 최대 6개 유효값과 n이다.
 - QRA 값은 Treasury actual/estimate, TBAC recommendation, dealer survey, UI proxy를 분리하고 모든 fact에 document version과 locator를 연결한다.
 - `ui_proxy_v1` 가중치는 2Y .20, 3Y .30, 5Y .50, 7Y .70, 10Y 1.00, 20Y 1.65, 30Y 2.05이며 Treasury 공식 지표가 아니다.
 

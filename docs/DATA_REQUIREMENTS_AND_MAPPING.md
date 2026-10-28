@@ -30,12 +30,12 @@
 | KPI/Stop TIPS | real yield % | high_yield + inflation_index_security | real yield 명칭 | auction_result, dashboard | K/C | SOURCE_NULL | OFFICIAL_ACTUAL, A |
 | KPI/Stop FRN | discount margin % | high_discnt_margin + floating_rate | discount margin 명칭 | auction_result, dashboard | K/C | SOURCE_NULL | OFFICIAL_ACTUAL, A |
 | KPI/응찰률 | % | bid_to_cover_ratio | DB 2.48 그대로, 화면만 ×100→248.0% | dashboard.bid_to_cover_display_pct | K/C | SOURCE_NULL | DERIVED_UI_PROXY, A |
-| KPI/Indirect·Direct·PD | % | indirect_bidder_accepted, direct_bidder_accepted, primary_dealer_accepted; total_accepted | 각 accepted/NULLIF(total,0)×100 | bidder_allocation; dashboard.*_share_pct | K | 분모0/NULL 또는 입력NULL→NULL | DERIVED_UI_PROXY, A |
-| KPI/참여자 직전 변화 | %p | 현재/직전 accepted,total | 현재 비중−C 비중 | dashboard.*_change_pp; prior_comparable | C | 비교 없음/결측→NULL | DERIVED_UI_PROXY, 양쪽 event ID |
+| KPI/Indirect·Direct·PD | % | indirect_bidder_accepted, direct_bidder_accepted, primary_dealer_accepted; comp_accepted | 각 accepted/NULLIF(comp_accepted,0)×100 | bidder_allocation; dashboard.*_share_pct | K | 분모0/NULL 또는 입력NULL→NULL | DERIVED_UI_PROXY, A |
+| KPI/참여자 직전 변화 | %p | 현재/직전 accepted,comp_accepted | 현재 비중−C 비중 | dashboard.*_change_pp; prior_comparable | C | 비교 없음/결측→NULL | DERIVED_UI_PROXY, 양쪽 event ID |
 | 차트/Other | 잔여 % | 위 세 비중 | 100−I−D−PD; 누락·범위이상은 NULL, 강제 보정 금지 | dashboard.other_ui_residual_pct | K | REVIEW_REQUIRED 이슈 | DERIVED_UI_PROXY, 공식 투자자 분류 아님 |
 | KPI/Allotted at High | % | allocation_pctage | 원천 퍼센트 그대로 | auction_result.allocation_percentage; dashboard.allotted_at_high_pct | K | SOURCE_NULL | OFFICIAL_ACTUAL, A 및 공식 glossary 의미 확인 |
 | Stop 이력·최근 6회 평균 | %·n | 동일 종류/만기 stop | 현재 제외, 직전 최대6 유효관측 평균, 실제 n 반환 | prior_comparable.prior_six_valid_stop_average/_sample_count | C | n=0→평균NULL | DERIVED_UI_PROXY, 입력 event 집합 |
-| 차트/배정 구성·응찰률 | % 시계열 | accepted/total, bid_to_cover_ratio | 선택 결과별 위 계산; NULL 구간 유지 | dashboard | K, 날짜 정렬 | 보간/합계보정 없음 | DERIVED_UI_PROXY, A |
+| 차트/배정 구성·응찰률 | % 시계열 | accepted/comp_accepted, bid_to_cover_ratio | 선택 결과별 위 계산; NULL 구간 유지 | dashboard | K, 날짜 정렬 | 보간/합계보정 없음 | DERIVED_UI_PROXY, A |
 | 차트/응찰률 24개월 기준 | 개별값·24개월 평균·±1σ·최근6회 평균 | 동일 종류·만기 bid_to_cover_ratio, auction_date | 각 관측일 기준 `(date-24개월, date]`; 모집단 표준편차; 최근6회는 유효 6건일 때만 표시; 결과 시작일보다 25개월 앞서 조회 | dashboard 원시 행을 화면에서 계산 | K, 날짜·CUSIP 정렬 | 24개월 전 관측 부족 또는 유효 6건 미만이면 해당 기준선 NULL | DERIVED_UI_PROXY, 입력 event 집합 |
 | 결과 표 | 입찰일/상품/발행액/Stop/응찰률/Allotted/비중/가격 | 위 필드 + price_per100 | 가격 USD per100, 금액bn, 비율 규칙 동일 | dashboard.price_per_100 포함 | K | NULL을 0으로 표시하지 않음 | 공식 원천+DERIVED_UI_PROXY 구별 |
 | 예정 일정 표 | 일자·ET마감·상품·금액·결제·직전Stop/응찰률 | 공고 API 필드 + C | 기준일 이상 90일 이내 `ANNOUNCED` 행; prior ratio×100 | dashboard, prior_comparable | K/C | 아직 공식 API에 공고되지 않은 일정은 표시하지 않음 | OFFICIAL_ACTUAL, A |

@@ -31,7 +31,7 @@ The comparable-result cell contains only the prior stop and bid-to-cover. This i
 - Stop metric and value
 - `bidToCoverRatio`
 - `offeringAmount`
-- indirect award share = `indirectBidderAccepted / totalAccepted`
+- indirect award share = `indirectBidderAccepted / competitiveAccepted`
 - award mix for indirect, direct, primary dealer, and residual other
 
 Price, coupon, investment rate, spread, tendered amount and CUSIP remain available in the selected-result card or API model, but do not all belong in the default table.
@@ -99,7 +99,7 @@ erDiagram
   SOURCE_SNAPSHOT ||--o{ AUCTION_SOURCE_LINK : contains
 ```
 
-The auction business key is `(cusip, auction_date, issue_date)`. CUSIP alone is unsafe because reopenings reuse the same security across auction events. `bidder_allocation.acceptance_rate` means accepted divided by tendered for that bidder class. Award share on the screen is calculated against `auction_result.total_accepted`.
+The auction business key is `(cusip, auction_date, issue_date)`. CUSIP alone is unsafe because reopenings reuse the same security across auction events. `bidder_allocation.acceptance_rate` means accepted divided by tendered for that bidder class. Award share on the screen is calculated against `auction_result.competitive_accepted_usd`.
 
 ## 6. Hot queries and indexes
 

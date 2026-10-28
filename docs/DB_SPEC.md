@@ -1,6 +1,6 @@
 # PostgreSQL DB 명세
 
-PostgreSQL 16 / schema `ust` / migrations `20260903_0001`–`20261007_0002`. 실제 적용 DB의 catalog에서 타입·NULL·기본값·제약·인덱스를 추출했다. 설명과 원천 매핑은 코드 계약과 함께 관리한다. 현재 화면 계약은 `UST_AUCTION_ui-baseline-v3.html`이다.
+PostgreSQL 16 / schema `ust` / migrations `20260903_0001`–`20261007_0002`. 실제 적용 DB의 catalog에서 타입·NULL·기본값·제약·인덱스를 추출했다. 설명과 원천 매핑은 코드 계약과 함께 관리한다. 현재 화면 계약은 `UST_AUCTION_ui-baseline-v3.html`이다. 아래 읽기 모델의 참여자별 비중 수식은 `20261028_0003` 마이그레이션 기준으로 갱신했으며, 실제 DB 적용 여부는 별도 확인이 필요하다.
 
 ## v3 구현 범위
 
@@ -1334,11 +1334,11 @@ CREATE UNIQUE INDEX source_snapshot_source_url_content_sha256_key ON ust.source_
     (r.bid_to_cover_ratio * (100)::numeric) AS bid_to_cover_display_pct,
     r.allocation_percentage AS allotted_at_high_pct,
     r.price_per_100,
-    ((a.indirect_bidder_accepted_usd / NULLIF(r.total_accepted_usd, (0)::numeric)) * (100)::numeric) AS indirect_share_pct,
-    ((a.direct_bidder_accepted_usd / NULLIF(r.total_accepted_usd, (0)::numeric)) * (100)::numeric) AS direct_share_pct,
-    ((a.primary_dealer_accepted_usd / NULLIF(r.total_accepted_usd, (0)::numeric)) * (100)::numeric) AS primary_dealer_share_pct,
+    ((a.indirect_bidder_accepted_usd / NULLIF(r.competitive_accepted_usd, (0)::numeric)) * (100)::numeric) AS indirect_share_pct,
+    ((a.direct_bidder_accepted_usd / NULLIF(r.competitive_accepted_usd, (0)::numeric)) * (100)::numeric) AS direct_share_pct,
+    ((a.primary_dealer_accepted_usd / NULLIF(r.competitive_accepted_usd, (0)::numeric)) * (100)::numeric) AS primary_dealer_share_pct,
         CASE
-            WHEN ((((100)::numeric - ((((a.indirect_bidder_accepted_usd + a.direct_bidder_accepted_usd) + a.primary_dealer_accepted_usd) / NULLIF(r.total_accepted_usd, (0)::numeric)) * (100)::numeric)) >= (0)::numeric) AND (((100)::numeric - ((((a.indirect_bidder_accepted_usd + a.direct_bidder_accepted_usd) + a.primary_dealer_accepted_usd) / NULLIF(r.total_accepted_usd, (0)::numeric)) * (100)::numeric)) <= (100)::numeric)) THEN ((100)::numeric - ((((a.indirect_bidder_accepted_usd + a.direct_bidder_accepted_usd) + a.primary_dealer_accepted_usd) / NULLIF(r.total_accepted_usd, (0)::numeric)) * (100)::numeric))
+            WHEN ((((100)::numeric - ((((a.indirect_bidder_accepted_usd + a.direct_bidder_accepted_usd) + a.primary_dealer_accepted_usd) / NULLIF(r.competitive_accepted_usd, (0)::numeric)) * (100)::numeric)) >= (0)::numeric) AND (((100)::numeric - ((((a.indirect_bidder_accepted_usd + a.direct_bidder_accepted_usd) + a.primary_dealer_accepted_usd) / NULLIF(r.competitive_accepted_usd, (0)::numeric)) * (100)::numeric)) <= (100)::numeric)) THEN ((100)::numeric - ((((a.indirect_bidder_accepted_usd + a.direct_bidder_accepted_usd) + a.primary_dealer_accepted_usd) / NULLIF(r.competitive_accepted_usd, (0)::numeric)) * (100)::numeric))
             ELSE NULL::numeric
         END AS other_ui_residual_pct,
     pc.prior_auction_event_id,
@@ -1346,9 +1346,9 @@ CREATE UNIQUE INDEX source_snapshot_source_url_content_sha256_key ON ust.source_
     pc.prior_bid_to_cover_ratio,
     pc.prior_six_valid_stop_average,
     pc.prior_six_valid_stop_sample_count,
-    (((a.indirect_bidder_accepted_usd / NULLIF(r.total_accepted_usd, (0)::numeric)) * (100)::numeric) - pc.prior_indirect_share_pct) AS indirect_change_pp,
-    (((a.direct_bidder_accepted_usd / NULLIF(r.total_accepted_usd, (0)::numeric)) * (100)::numeric) - pc.prior_direct_share_pct) AS direct_change_pp,
-    (((a.primary_dealer_accepted_usd / NULLIF(r.total_accepted_usd, (0)::numeric)) * (100)::numeric) - pc.prior_primary_dealer_share_pct) AS primary_dealer_change_pp,
+    (((a.indirect_bidder_accepted_usd / NULLIF(r.competitive_accepted_usd, (0)::numeric)) * (100)::numeric) - pc.prior_indirect_share_pct) AS indirect_change_pp,
+    (((a.direct_bidder_accepted_usd / NULLIF(r.competitive_accepted_usd, (0)::numeric)) * (100)::numeric) - pc.prior_direct_share_pct) AS direct_change_pp,
+    (((a.primary_dealer_accepted_usd / NULLIF(r.competitive_accepted_usd, (0)::numeric)) * (100)::numeric) - pc.prior_primary_dealer_share_pct) AS primary_dealer_change_pp,
         CASE
             WHEN (r.bid_to_cover_ratio IS NULL) THEN 'ANNOUNCED'::text
             ELSE 'RESULT_AVAILABLE'::text
@@ -1372,9 +1372,9 @@ CREATE UNIQUE INDEX source_snapshot_source_url_content_sha256_key ON ust.source_
     pr.stop_metric_code AS prior_stop_metric_code,
     pr.stop_value AS prior_stop_value,
     pr.bid_to_cover_ratio AS prior_bid_to_cover_ratio,
-    ((pa.indirect_bidder_accepted_usd / NULLIF(pr.total_accepted_usd, (0)::numeric)) * (100)::numeric) AS prior_indirect_share_pct,
-    ((pa.direct_bidder_accepted_usd / NULLIF(pr.total_accepted_usd, (0)::numeric)) * (100)::numeric) AS prior_direct_share_pct,
-    ((pa.primary_dealer_accepted_usd / NULLIF(pr.total_accepted_usd, (0)::numeric)) * (100)::numeric) AS prior_primary_dealer_share_pct,
+    ((pa.indirect_bidder_accepted_usd / NULLIF(pr.competitive_accepted_usd, (0)::numeric)) * (100)::numeric) AS prior_indirect_share_pct,
+    ((pa.direct_bidder_accepted_usd / NULLIF(pr.competitive_accepted_usd, (0)::numeric)) * (100)::numeric) AS prior_direct_share_pct,
+    ((pa.primary_dealer_accepted_usd / NULLIF(pr.competitive_accepted_usd, (0)::numeric)) * (100)::numeric) AS prior_primary_dealer_share_pct,
     avg6.stop_average AS prior_six_valid_stop_average,
     avg6.sample_count AS prior_six_valid_stop_sample_count
    FROM ((((ust.auction_event e

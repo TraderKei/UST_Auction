@@ -52,3 +52,14 @@ test("database event status follows the v3 bid-to-cover result rule", async () =
   assert.doesNotMatch(schema, /CASE WHEN r\.stop_value IS NULL THEN 'ANNOUNCED'/);
   assert.match(spec, /`20260903_0001`–`20261007_0002`/);
 });
+
+test("current and prior database award shares use competitive accepted amounts", async () => {
+  const [schema, migration] = await Promise.all([
+    read("db/ust_pipeline_schema.sql"),
+    read("db/migrations/versions/20261028_0003_competitive_award_shares.py"),
+  ]);
+  for (const source of [schema, migration]) {
+    assert.match(source, /primary_dealer_accepted_usd\/NULLIF\(r\.competitive_accepted_usd,0\)\*100 AS primary_dealer_share_pct/);
+    assert.match(source, /primary_dealer_accepted_usd\/NULLIF\(pr\.competitive_accepted_usd,0\)\*100 AS prior_primary_dealer_share_pct/);
+  }
+});

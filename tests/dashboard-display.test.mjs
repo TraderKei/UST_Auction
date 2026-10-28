@@ -5,7 +5,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { loadSource } from "./source-loader.mjs";
 
-const { subscriptionPercent, subscription, subscriptionRollingSeries, awardMix, priorResult, percentagePointChange, signedPoints } = loadSource("../lib/auction-display.ts");
+const { subscriptionPercent, subscription, subscriptionRollingSeries, awardMix, percent, priorResult, percentagePointChange, signedPoints } = loadSource("../lib/auction-display.ts");
 const { normalizeFiscalAuction } = loadSource("../lib/treasury.ts");
 const { defaultAuctionDateRange, filterAuctionsByDateRange, isIsoDate, resolveAuctionDateRange, shiftCalendarMonths, shiftCalendarYears, validateAuctionDateRange } = loadSource("../lib/auction-date-range.ts");
 const { AUCTION_FILTER_IDS, resolveAuctionFilter } = loadSource("../lib/auction-filter.ts");
@@ -284,6 +284,16 @@ test("참여자별 낙찰 비중은 경쟁입찰 낙찰액 기준이고 누락 �
   assert.equal(awardMix({ ...actual, directAccepted: null }), null);
   assert.equal(awardMix({ ...actual, indirectAccepted: 0, directAccepted: 0, dealerAccepted: 0 }), null);
   assert.equal(awardMix({ ...actual, dealerAccepted: -1 }), null);
+});
+
+test("2026-10-27 5년물 PD 비중은 공식 경쟁입찰 낙찰액 기준 10.6%", () => {
+  const auction = {
+    ...base, auctionDate: "2026-10-27", totalAccepted: 70_000_063_600,
+    dealerAccepted: 7_312_950_000, directAccepted: 20_360_551_500,
+    indirectAccepted: 41_588_400_000,
+  };
+  assert.equal(percent(awardMix(auction)?.[2]), "10.6%");
+  assert.equal(auction.dealerAccepted + auction.directAccepted + auction.indirectAccepted, 69_261_901_500);
 });
 
 test("이전 결과는 같은 종류·만기, 이전 날짜만 사용", () => {
