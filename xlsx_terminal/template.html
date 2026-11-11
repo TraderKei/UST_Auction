@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KTB AUCTION — DB TABLE</title><style>/*__STYLE__*/</style></head>
+<body><header><div><b>KTB <span>AUCTION</span></b><small>국고채 발행·입찰 정보단말</small></div><div class="tools"><span id="asof"></span><button id="theme">화이트 테마</button></div></header>
+<nav aria-label="화면 선택" id="tabs"></nav>
+<div class="toolbar"><label>조회 시작 <input type="month" id="from"></label><label>종료 <input type="month" id="to"></label><label>만기 <select id="maturity"></select></label><label>유형 <select id="kind"></select></label><label>종목 검색 <input id="search" type="search" placeholder="종목명 입력"></label><button id="reset">초기화</button><button id="export">조회 CSV</button></div>
+<div id="status" role="status"></div><main id="content"></main>
+<details id="source"><summary>원본 데이터 · 테이블/컬럼 사전 · 계산 기준</summary><div class="source-body"><p>데이터 원천: DB_TABLE.xlsx만 사용. 행 번호는 Excel의 실제 행 번호입니다. 원문 0과 결측값(—)을 구분합니다. 아래 원본 조회는 화면 필터와 독립적입니다.</p><label>테이블 <select id="sourceTable"></select></label><label>원본 검색 <input id="sourceSearch" type="search"></label><div id="sourceInfo"></div><div id="raw"></div></div></details>
+<footer>DB_TABLE.xlsx 내장 스냅샷 · 네트워크 요청 없음 · 금액은 엑셀 원문 단위, 금리 %, 테일 bp · 데이터가 없는 기간을 0으로 보완하지 않습니다.<br><span id="hash"></span></footer>
+<dialog id="detail"><div class="dialog-head"><h2>입찰 상세</h2><button id="closeDetail">닫기</button></div><div id="detailBody"></div></dialog>
+<script id="database" type="application/json">/*__DATA__*/</script><script>/*__APP__*/</script></body></html>
