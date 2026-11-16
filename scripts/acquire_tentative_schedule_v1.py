@@ -253,7 +253,7 @@ def build_html(snapshot: dict) -> str:
     html = replace_once(html, 'calendar.append(head, meta, weekdayRow, grid, legend, message);',
                         '''const provenance = document.createElement("p");
       provenance.className = "auction-calendar-source";
-      provenance.textContent = "잠정 일정은 공식 공고 전까지 변경될 수 있습니다.";
+      provenance.textContent = "잠정 일정은 미국 동부 시간(ET) 기준으로만 표시되며, 공식 공고 전까지 변경될 수 있습니다";
       calendar.append(head, meta, weekdayRow, grid, legend, provenance, message);''')
 
     schedule_start = html.index('q.map(i=>{let b=G(i,n)')
@@ -310,6 +310,7 @@ def build_html(snapshot: dict) -> str:
         "공고된 예정 입찰": "Announced upcoming auction",
         "공고된 예정": "Announced upcoming",
         "잠정 일정은 공식 공고 전까지 변경될 수 있습니다.": "Tentative dates may change before an official announcement.",
+        "잠정 일정은 미국 동부 시간(ET) 기준으로만 표시되며, 공식 공고 전까지 변경될 수 있습니다": "Tentative schedules are shown only in U.S. Eastern Time (ET) and may change before the official announcement.",
         "잠정 일정 · 공식 공고 전": "Tentative schedule · before official announcement",
         "잠정 · 공고 확인 필요": "Tentative · check announcement",
         "재무부 잠정 일정": "Treasury tentative schedule",

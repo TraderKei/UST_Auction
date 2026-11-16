@@ -234,7 +234,7 @@ test("calendar footer has no links and the upcoming badge uses a muted color wit
   const calendar = html.match(/<script id="auction-month-calendar-script">([\s\S]*?)<\/script>/)?.[1];
   const css = html.match(/<style id="ust-v5-tentative-styles">([\s\S]*?)<\/style>/)?.[1];
   assert.ok(calendar && css);
-  assert.match(calendar, /provenance\.textContent = "잠정 일정은 공식 공고 전까지 변경될 수 있습니다\."/);
+  assert.match(calendar, /provenance\.textContent = "잠정 일정은 미국 동부 시간\(ET\) 기준으로만 표시되며, 공식 공고 전까지 변경될 수 있습니다"/);
   assert.doesNotMatch(calendar, /provenance\.append\(|provenance\.innerHTML|announcedLink|link\.href = info\.sourceUrl/);
   const scheduleNote = html.match(/className:"schedule-note",children:\[([\s\S]*?)\]\}\),e\("div",\{className:"table-wrap"/)?.[1];
   assert.ok(scheduleNote);
@@ -276,9 +276,14 @@ test("English mode translates new calendar and acquisition messages", () => {
   assert.ok(preferences);
   const translationFunction = preferences.slice(preferences.indexOf("function translated(text)"), preferences.indexOf("function syncText(node)"));
   const translate = new Function("entries", `${translationFunction}; return translated;`)(entries);
+  assert.equal(
+    translate("잠정 일정은 미국 동부 시간(ET) 기준으로만 표시되며, 공식 공고 전까지 변경될 수 있습니다"),
+    "Tentative schedules are shown only in U.S. Eastern Time (ET) and may change before the official announcement.",
+  );
   for (const source of [
     "2026년 10월 · 한국 KST 기준 · 결과 12건 · 공고 4건 · 잠정 3건",
     "잠정 일정은 공식 공고 전까지 변경될 수 있습니다.",
+    "잠정 일정은 미국 동부 시간(ET) 기준으로만 표시되며, 공식 공고 전까지 변경될 수 있습니다",
     "미국 재무부 Fiscal Data 및 TreasuryDirect 공식 API 자료입니다. 조회 범위 2026-01-01~2026-10-22, 결과 50건, 공고 5건, 잠정 20건.",
     "잠정 · 공고 확인 필요",
     "4주 단기채 잠정을 선택했습니다.",
