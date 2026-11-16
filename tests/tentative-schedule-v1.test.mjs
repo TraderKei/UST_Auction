@@ -22,6 +22,7 @@ async function runLoader(fetch, officialResults = []) {
   const window = merger();
   window.__UST_LOAD_OFFICIAL_RESULTS__ = async () => officialResults;
   let start;
+  let initial;
   let resolveRender;
   const finished = new Promise((resolve) => { resolveRender = resolve; });
   class FixedDate extends Date {
@@ -29,7 +30,10 @@ async function runLoader(fetch, officialResults = []) {
   }
   window.location = { href: "file:///UST_AUCTION_ui-baseline-v5.html" };
   window.addEventListener = (_, callback) => { start = callback; };
-  window.__UST_RENDER_AUCTIONS__ = (data) => resolveRender(data);
+  window.__UST_RENDER_AUCTIONS__ = (data) => {
+    if (data.source === "loading") initial = data;
+    else resolveRender(data);
+  };
   vm.runInNewContext(loader, {
     AbortController, Date: FixedDate, URL, fetch, setTimeout, clearTimeout,
     requestAnimationFrame: (callback) => callback(),
@@ -39,6 +43,8 @@ async function runLoader(fetch, officialResults = []) {
     window,
   });
   start();
+  assert.equal(initial?.source, "loading");
+  assert.ok(initial.upcoming.some((row) => row.tentative));
   return finished;
 }
 
@@ -197,6 +203,7 @@ test("v5 script, labels, and offline schedule path are connected", () => {
   assert.match(html, /upcoming: window\.__UST_MERGE_TENTATIVE__\(announced, announced\.map\(normalize\), todayText, upcomingTo\)/);
   assert.match(html, /window\.__UST_MERGE_RESULTS__\(fiscalRows, treasuryDirectResults\)/);
   assert.match(html, /const treasuryDirectResultsPromise = window\.__UST_LOAD_OFFICIAL_RESULTS__\(\)/);
+  assert.match(html, /\.data-status\.unavailable\{display:block\}/);
   assert.match(html, /status: auction\.tentative \? "tentative" : "upcoming"/);
   assert.match(html, /const tentativeCount = datedEvents\.filter/);
   assert.match(html, /className:"tentative-badge"/);

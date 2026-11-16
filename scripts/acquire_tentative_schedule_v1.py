@@ -154,6 +154,7 @@ def build_html(snapshot: dict) -> str:
                  ':root .date-range-form .results-export{width:30px;height:30px;flex:0 0 30px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:1px solid var(--ce-border2);border-radius:4px;background:var(--panel);cursor:pointer}\n'
                  ':root .date-range-form .results-export:hover{border-color:#217346;background:var(--ce-hover)}\n'
                  ':root .date-range-form .results-export:focus-visible{outline:2px solid #217346;outline-offset:2px}\n'
+                 'html[data-ust-theme] .data-status.unavailable{display:block}\n'
                  '</style>\n')
     html = replace_once(html, '<script id="standalone-live-data-script">', insertion + '<script id="standalone-live-data-script">')
 
@@ -177,6 +178,15 @@ def build_html(snapshot: dict) -> str:
       saveCache(from, to, fiscalRows, retrievedAt);''')
     html = replace_once(html, '    try {\n      const fiscalRows = await fetchRows(from, to);',
                         '    const treasuryDirectPromise = window.__UST_LOAD_OFFICIAL_ANNOUNCEMENTS__();\n\n    try {\n      const fiscalRows = await fetchRows(from, to);')
+    html = replace_once(html, '    const treasuryDirectPromise = window.__UST_LOAD_OFFICIAL_ANNOUNCEMENTS__();',
+                        '''    // Display the embedded schedule while official requests are pending.
+    window.__UST_RENDER_AUCTIONS__({
+      upcoming: window.__UST_MERGE_TENTATIVE__([], [], todayText, upcomingTo),
+      results: [], source: "loading", updatedAt: retrievedAt.toISOString(),
+      resultFrom: range.from, resultTo: range.to,
+      defaultResultFrom: defaults.from, defaultResultTo: defaults.to, initialFilter,
+    });
+    const treasuryDirectPromise = window.__UST_LOAD_OFFICIAL_ANNOUNCEMENTS__();''')
     html = replace_once(html, '''    } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);''',
                         '''    } catch (error) {

@@ -400,6 +400,7 @@ html[data-ust-theme="light"] .auction-calendar-legend i.tentative{border:1px sol
 :root .date-range-form .results-export{width:30px;height:30px;flex:0 0 30px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:1px solid var(--ce-border2);border-radius:4px;background:var(--panel);cursor:pointer}
 :root .date-range-form .results-export:hover{border-color:#217346;background:var(--ce-hover)}
 :root .date-range-form .results-export:focus-visible{outline:2px solid #217346;outline-offset:2px}
+html[data-ust-theme] .data-status.unavailable{display:block}
 </style>
 <script id="standalone-live-data-script">(() => {
   "use strict";
@@ -680,6 +681,13 @@ html[data-ust-theme="light"] .auction-calendar-legend i.tentative{border:1px sol
       return missing.length ? ` 최근 45일 중 결과 미수신 ${missing.length}건.` : "";
     };
 
+    // Display the embedded schedule while official requests are pending.
+    window.__UST_RENDER_AUCTIONS__({
+      upcoming: window.__UST_MERGE_TENTATIVE__([], [], todayText, upcomingTo),
+      results: [], source: "loading", updatedAt: retrievedAt.toISOString(),
+      resultFrom: range.from, resultTo: range.to,
+      defaultResultFrom: defaults.from, defaultResultTo: defaults.to, initialFilter,
+    });
     const treasuryDirectPromise = window.__UST_LOAD_OFFICIAL_ANNOUNCEMENTS__();
     const treasuryDirectResultsPromise = window.__UST_LOAD_OFFICIAL_RESULTS__();
 
